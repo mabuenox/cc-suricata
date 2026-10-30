@@ -9,12 +9,12 @@ It does not touch Claude Code's configuration: it reads `~/.claude/sessions/*.js
 ## Usage
 
 ```
-npx github:mabuenox/cc-suricata
+npx cc-suricata
 ```
 
 Starts the server at <http://localhost:4747> and opens your browser. Options:
 
-- `PORT=5000 npx github:mabuenox/cc-suricata` changes the port.
+- `PORT=5000 npx cc-suricata` changes the port.
 - `--no-open` does not open the browser.
 - `--once` prints the sessions as JSON and exits.
 
