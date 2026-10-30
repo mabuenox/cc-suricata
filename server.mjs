@@ -3,7 +3,7 @@
 // Sin dependencias. `node server.mjs` o `node server.mjs --once` (imprime el JSON y sale).
 import { readFileSync, readdirSync, watch, openSync, readSync, closeSync, statSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { join, dirname, isAbsolute } from 'node:path'
+import { join, dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
@@ -168,7 +168,8 @@ function gitBranch(cwd) {
   try {
     let gitDir = join(cwd, '.git')
     if (!statSync(gitDir).isDirectory()) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
-    if (/^(\\\\|\/\/)/.test(gitDir)) return null // una ruta UNC haría una petición de red con credenciales
+    gitDir = resolve(cwd, gitDir) // relativa al worktree; resuelta antes de mirar la raíz
+    if (!/^[A-Za-z]:\\/.test(gitDir)) return null // una ruta UNC (\\host\…) haría una petición de red con credenciales
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
     return head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)
   } catch {
