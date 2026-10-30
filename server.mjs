@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code Watcher: lee ~/.claude/sessions (estado vivo) y ~/.claude/projects
+// Claude Code Suricata: lee ~/.claude/sessions (estado vivo) y ~/.claude/projects
 // (transcripts) y los sirve en localhost con SSE.
 // Sin dependencias. `npx cc-suricata`, `--once` (imprime el JSON y sale), `--no-open` (no abre el navegador).
 import { readFileSync, readdirSync, watch, openSync, readSync, closeSync, statSync, existsSync } from 'node:fs'
@@ -296,7 +296,7 @@ createServer((req, res) => {
   res.end(readFileSync(join(HERE, file)))
 }).listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`
-  console.log(`Claude Code Watcher en ${url}`)
+  console.log(`Claude Code Suricata en ${url}`)
   if (process.argv.includes('--no-open')) return
   const open = { win32: ['cmd.exe', ['/c', 'start', '', url]], darwin: ['open', [url]] }[process.platform] ?? ['xdg-open', [url]]
   spawn(...open, { stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref()

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Code Watcher</title>
+<title>Claude Code Suricata</title>
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Silkscreen&display=swap">
@@ -119,7 +119,7 @@
 <body>
 <header>
   <img class="logo" src="/icon.svg" alt="" width="32" height="32">
-  <span class="title">Claude Code Watcher</span>
+  <span class="title">Claude Code Suricata</span>
   <div class="totals" id="totals"></div>
   <div class="right">
     <span class="hint"><kbd>↑</kbd><kbd>↓</kbd> moverse <kbd>↵</kbd> abrir <kbd>esc</kbd> cerrar</span>
@@ -207,7 +207,7 @@
     if (!sorted.some((s) => s.sessionId === selectedId)) selectedId = sorted[0]?.sessionId ?? null
     const count = (g) => sorted.filter((s) => g.statuses.includes(s.status)).length
     const pending = count(GROUPS[0]) + count(GROUPS[1])
-    document.title = `${pending ? `(${pending}) ` : ''}Claude Code Watcher`
+    document.title = `${pending ? `(${pending}) ` : ''}Claude Code Suricata`
     document.getElementById('totals').innerHTML = GROUPS.map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
     const cols = '<div class="cols"><span></span><span>Sesión</span><span>Ahora</span><span>Modelo</span><span>Contexto</span><span class="r">Abierta</span><span class="r" title="Prompts tuyos / turnos del modelo">Prompts</span><span class="r">Tokens</span><span class="r">Desde</span></div>'
     document.getElementById('list').innerHTML = sorted.length
