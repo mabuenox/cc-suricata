@@ -2,6 +2,8 @@
 
 All your Claude Code sessions on one local page, at a glance: what each one is doing, which one is waiting for you, which one is asking you something, model, context usage, background tasks and agents. Sends a Windows notification when a session finishes its turn or asks you a question.
 
+![Claude Code Watcher: session list with a session asking a question, two waiting, two working, and the detail panel open](docs/screenshot.jpg)
+
 It does not touch Claude Code's configuration: it reads `~/.claude/sessions/*.json` (the registry of live sessions) and `~/.claude/projects/**/*.jsonl` (transcripts) and reacts to file system changes.
 
 ## Usage
