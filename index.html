@@ -3,115 +3,254 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sesiones de Claude Code</title>
+<title>Claude Code Watcher</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Silkscreen&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js" integrity="sha384-H+hy9ULve6xfxRkWIh/YOtvDdpXgV2fmAGQkIDTxIgZwNoaoBal14Di2YTMR6MzR" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu" crossorigin="anonymous"></script>
 <style>
-  :root { color-scheme: dark; --bg: #16181d; --panel: #1c1f25; --line: #2a2e36; --text: #e6e6e6; --dim: #8b8f98; --busy: #d9a033; --idle: #4caf7d; --waiting: #e05d5d; }
+  :root {
+    color-scheme: dark;
+    --bg: #191a1f; --side: #16171b; --raised: #202126; --hover: #1f2026; --border: #2a2b32; --border-strong: #35363e;
+    --text: #eeeffc; --muted: #8a8f98; --faint: #7e838e;
+    --accent: #5e6ad2; --need: #f2994a; --done: #4cb782; --work: #f2c94c;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    --cols: 16px minmax(170px, 1fr) minmax(200px, 2.4fr) 64px 118px 64px 72px 58px 60px;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; display: grid; grid-template-columns: 380px 1fr; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
-  aside { border-right: 1px solid var(--line); overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
-  .banner { border: 1px solid var(--waiting); border-radius: 10px; padding: 12px 14px; background: #e05d5d14; cursor: pointer; }
-  .banner .line { display: flex; justify-content: space-between; gap: 8px; }
-  .banner b { color: var(--text); } .banner .why { color: var(--waiting); margin-top: 2px; }
-  h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px 4px; }
-  .group { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .row { display: grid; grid-template-columns: 10px 1fr auto; column-gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  .row:last-child { border-bottom: 0; } .row:hover { background: #ffffff08; } .row.selected { background: #ffffff10; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
-  .busy .dot { background: var(--busy); animation: pulse 1.6s infinite; } .idle .dot { background: var(--idle); } .waiting .dot { background: var(--waiting); }
+  html, body { height: 100%; }
+  body { margin: 0; display: grid; grid-template-rows: auto 1fr; background: var(--bg); color: var(--text); font: 400 14px/1.5 Inter, system-ui, sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: #8b93f0; }
+
+  /* Cabecera */
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--side); }
+  header .logo { width: 32px; height: 32px; display: block; }
+  header .title { font: 12px/1 Silkscreen, monospace; letter-spacing: .02em; white-space: nowrap; }
+  header .totals { display: flex; gap: 18px; margin-left: 24px; font-size: 13px; color: var(--muted); }
+  header .totals b { color: var(--text); font-weight: 600; margin-right: 4px; }
+  header .totals .zero { opacity: .5; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--faint); }
+  header .hint kbd { font: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px; margin: 0 1px; color: var(--muted); }
+  .live { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4cb782; }
+  .live.off { color: var(--need); } .live.off::before { background: var(--need); }
+
+  /* Lista + panel */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 0; overflow: hidden; transition: grid-template-columns .15s ease; }
+  .layout.peek-open { grid-template-columns: minmax(0, 1fr) 460px; }
+  @media (prefers-reduced-motion: reduce) { .layout { transition: none; } }
+  .list { overflow: auto; padding-bottom: 40px; }
+  .cols, .row { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 14px; padding: 0 20px; }
+  .cols { position: sticky; top: 0; z-index: 1; height: 32px; font-size: 12px; color: var(--faint); background: var(--bg); border-bottom: 1px solid var(--border); }
+  .cols .r, .row .r { text-align: right; }
+  .list h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 20px; font-size: 13.5px; font-weight: 600; background: var(--raised); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
+  .list h2.need { color: var(--need); } .list h2.done { color: var(--done); } .list h2.work { color: var(--work); }
+  .list h2 span { color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .row { padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .row:hover { background: var(--hover); }
+  .row.selected { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+  .row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .row svg { width: 14px; height: 14px; display: block; }
+  .need svg { color: var(--need); } .done svg { color: var(--done); } .work svg { color: var(--work); }
+  .work svg .spin { animation: pulse 2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
-  .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row .name b { font-weight: 600; } .row .name span { color: var(--dim); margin-left: 6px; font-size: 12px; }
-  .row .time { color: var(--dim); font-size: 11px; white-space: nowrap; }
-  .row .state { grid-column: 2 / 4; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .busy .state { color: var(--busy); } .idle .state { color: var(--idle); } .waiting .state { color: var(--waiting); }
-  .state .tool { font-family: ui-monospace, Consolas, monospace; }
-  .row .info { grid-column: 2 / 4; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .files { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre; overflow: auto; }
-  main { overflow: auto; padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; }
-  main .title { font-size: 18px; font-weight: 600; }
-  main .status { font-size: 12px; margin-left: 10px; }
-  .busy .status { color: var(--busy); } .idle .status { color: var(--idle); } .waiting .status { color: var(--waiting); }
-  .meta { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
-  .label { color: var(--dim); font-size: 11px; text-transform: uppercase; margin-bottom: 6px; }
-  .block { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-wrap: anywhere; }
+  @media (prefers-reduced-motion: reduce) { .work svg .spin { animation: none; } }
+  .who { min-width: 0; display: flex; flex-direction: column; }
+  .who .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who .branch { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doing { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .need .doing { color: var(--text); font-weight: 500; }
+  .doing code, .doing .tag { font: 12.5px var(--mono); color: var(--text); background: var(--raised); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; margin-right: 6px; }
+  .doing .tag { font-family: Inter, system-ui, sans-serif; color: var(--work); border-color: #f2c94c55; }
+  .run { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+  .run b { display: block; color: var(--text); font-weight: 500; }
+  .num { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .num b { color: var(--text); font-weight: 500; }
+  .gauge { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .gauge i { display: block; height: 4px; background: var(--border-strong); border-radius: 2px; overflow: hidden; }
+  .gauge i b { display: block; height: 100%; background: var(--muted); }
+  .gauge.high i b { background: var(--work); } .gauge.full i b { background: var(--need); }
+  .empty { display: grid; place-items: center; height: 60%; color: var(--muted); text-align: center; }
+  .empty b { display: block; color: var(--text); font-weight: 500; margin-bottom: 4px; }
+
+  /* Panel de previsualización: solo los textos largos */
+  .peek { border-left: 1px solid var(--border); background: var(--side); overflow: auto; min-width: 0; }
+  .peek .head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--side); }
+  .peek .head h1 { font-size: 15px; font-weight: 600; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .peek .close { background: none; border: 0; color: var(--muted); font: 18px/1 Inter; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .peek .close:hover { background: var(--raised); color: var(--text); }
+  .peek .close:focus-visible { outline: 2px solid var(--accent); }
+  .peek section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .peek h3 { font-size: 12.5px; font-weight: 500; color: var(--muted); margin: 0 0 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12.5px; font-weight: 500; background: var(--raised); white-space: nowrap; }
+  .pill svg { width: 13px; height: 13px; }
+  .question { padding: 10px 12px; border: 1px solid var(--need); border-radius: 8px; background: #f2994a14; font-weight: 500; }
+  .md { line-height: 1.55; }
   .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
-  .md p, .md ul, .md ol, .md pre { margin: 0 0 10px; } .md h1, .md h2, .md h3 { font-size: 14px; margin: 14px 0 6px; }
-  .md code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #ffffff10; padding: 1px 4px; border-radius: 3px; }
-  .md pre { background: #0f1115; padding: 10px 12px; border-radius: 6px; overflow: auto; } .md pre code { background: none; padding: 0; }
-  .md table { border-collapse: collapse; } .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
-  .md a { color: #7ab7ff; }
-  .empty { color: var(--dim); margin: auto; }
-  @media (max-width: 800px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+  .md p, .md ul, .md ol, .md pre { margin: 0 0 10px; } .md h1, .md h2, .md h3 { font-size: 14px; margin: 16px 0 6px; color: var(--text); }
+  .md code { font: 13px var(--mono); background: var(--raised); border: 1px solid var(--border); padding: 1px 4px; border-radius: 4px; }
+  .md pre { background: var(--bg); border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; overflow: auto; } .md pre code { background: none; border: 0; padding: 0; }
+  .md table { border-collapse: collapse; } .md th, .md td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+  .prompt { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; border-left: 2px solid var(--border-strong); padding-left: 12px; }
+  .files { list-style: none; margin: 0; padding: 0; }
+  .files li { font: 12.5px/1.4 var(--mono); overflow-wrap: anywhere; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .files li:last-child { border-bottom: 0; }
+  .files a { color: var(--text); text-decoration: none; display: flex; justify-content: space-between; gap: 10px; }
+  .files a:hover { color: #8b93f0; } .files a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .files a span { color: var(--faint); font: 12px Inter, system-ui, sans-serif; white-space: nowrap; }
+  .md pre code.hljs, .cmd code.hljs { background: none; padding: 0; }
+  .cmd { margin: 0 0 8px; background: var(--bg); border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; overflow: auto; font: 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cmd:last-child { margin-bottom: 0; }
+  .src { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; color: var(--muted); vertical-align: 1px; }
+  .path { color: var(--muted); font: 12.5px var(--mono); }
+
+  @media (max-width: 1100px) {
+    .layout.peek-open { grid-template-columns: 0 minmax(0, 1fr); }
+    .layout.peek-open .list { display: none; }
+    :root { --cols: 16px minmax(140px, 1fr) minmax(160px, 2fr) 60px; }
+    .cols > :nth-child(n+5), .row > :nth-child(n+5) { display: none; }
+    header .totals, header .hint { display: none; }
+  }
 </style>
 </head>
 <body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js" integrity="sha384-H+hy9ULve6xfxRkWIh/YOtvDdpXgV2fmAGQkIDTxIgZwNoaoBal14Di2YTMR6MzR" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu" crossorigin="anonymous"></script>
-<aside id="list"><div class="empty">Conectando…</div></aside>
-<main id="detail"><div class="empty">Selecciona una sesión</div></main>
+<header>
+  <img class="logo" src="/icon.svg" alt="" width="32" height="32">
+  <span class="title">Claude Code Watcher</span>
+  <div class="totals" id="totals"></div>
+  <div class="right">
+    <span class="hint"><kbd>↑</kbd><kbd>↓</kbd> moverse <kbd>↵</kbd> abrir <kbd>esc</kbd> cerrar</span>
+    <span class="live" id="live">conectando</span>
+    <span id="clock"></span>
+  </div>
+</header>
+<div class="layout" id="layout">
+  <div class="list" id="list"><div class="empty"><div>Conectando…</div></div></div>
+  <aside class="peek" id="peek" hidden></aside>
+</div>
 <script>
-  const GROUPS = [['waiting', 'Te necesitan'], ['idle', 'Esperándote'], ['busy', 'Trabajando']]
-  const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
-  const dur = (ms) => {
-    const s = Math.round(ms / 1000)
-    return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`
+  const ICON = {
+    // te pregunta: "?"; esperándote: el chevron del prompt, te toca escribir; trabajando: en curso; background: en curso, punteado
+    waiting: '<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="7"/><path d="M5.2 5.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.6-.9 1.2v.3" stroke="#191a1f" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="7" cy="10.6" r=".9" fill="#191a1f"/></svg>',
+    idle: '<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="7"/><path d="M5.3 4.3L8.2 7l-2.9 2.7" stroke="#191a1f" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    busy: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor"><circle cx="7" cy="7" r="6" stroke-width="1.4"/><path class="spin" d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="currentColor" stroke="none"/></svg>',
+    background: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor"><circle cx="7" cy="7" r="6" stroke-width="1.4" stroke-dasharray="2.2 2"/><path class="spin" d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="currentColor" stroke="none"/></svg>',
   }
-  const ago = (ms) => ms ? `hace ${dur(Date.now() - new Date(ms))}` : ''
-  const k = (n) => n == null ? '' : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-  const modelOf = (s) => s.model?.split('-')[1] ?? ''
-  // shortcut: la ventana de contexto depende del modelo (200k o 1M), así que se muestra el tamaño absoluto y no un %.
-  const info = (s) => [modelOf(s), s.permissionMode, s.contextTokens && `ctx ${k(s.contextTokens)}`, s.status === 'busy' && s.lastPrompt?.at && `turno de ${dur(Date.now() - new Date(s.lastPrompt.at))}`]
-    .filter(Boolean).map(esc).join(' · ')
-  // Markdown si las librerías cargaron (CDN); si no, texto plano.
+  const CLASS = { waiting: 'need', idle: 'done', busy: 'work', background: 'work' }
+  const WORD = { waiting: 'Te pregunta', idle: 'Esperándote', busy: 'Trabajando', background: 'En background' }
+  const GROUPS = [
+    { statuses: ['waiting'], label: 'Te necesitan', one: 'te pregunta', many: 'te preguntan' },
+    { statuses: ['idle'], label: 'Esperándote', one: 'esperándote', many: 'esperándote' },
+    { statuses: ['busy', 'background'], label: 'Trabajando', one: 'trabajando', many: 'trabajando' },
+  ]
+  const groupOf = (s) => GROUPS.findIndex((g) => g.statuses.includes(s.status))
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   const md = (text) => window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : esc(text)
-  const block = (label, text) => text ? `<div><div class="label">${label}</div><div class="block md">${md(text)}</div></div>` : ''
-  const state = (s) => s.status === 'waiting' ? `Te pregunta · <span class="tool">AskUserQuestion</span>`
-    : s.status === 'idle' ? 'Esperándote'
-    : `Trabajando${s.currentTool ? ` · <span class="tool">${esc(s.currentTool)}</span>` : ''}`
-  const nameOf = (s) => `<b>${esc(s.name ?? s.cwd)}</b>${s.branch ? `<span>${esc(s.branch)}</span>` : ''}`
+  const k = (n) => n == null ? '' : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+  const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h` }
+  const sinceOf = (s) => s.status === 'busy' ? s.lastPrompt?.at ?? s.statusSince : s.status === 'background' ? s.background[0]?.at ?? s.updatedAt : s.status === 'waiting' ? s.updatedAt : s.statusSince ?? s.updatedAt
+  const modelOf = (s) => s.model?.split('-')[1] ?? ''
+  const SRC = { 'claude-desktop': 'Desktop', 'claude-vscode': 'VS Code', 'sdk-py': 'SDK', 'sdk-ts': 'SDK' }
+  const src = (s) => SRC[s.entrypoint] ? `<span class="src">${SRC[s.entrypoint]}</span>` : ''
+  const firstLine = (t) => (t ?? '').split('\n').find((l) => l.trim())?.replace(/[*`_#]/g, '') ?? ''
+  // shortcut: la ventana de contexto no está en los datos; por encima de 200k se asume 1M.
+  const gauge = (ctx) => {
+    if (!ctx) return '<span></span>'
+    const pct = Math.min(100, Math.round((ctx / (ctx > 200_000 ? 1_000_000 : 200_000)) * 100))
+    return `<span class="gauge ${pct > 85 ? 'full' : pct > 60 ? 'high' : ''}" title="${k(ctx)} tokens en contexto. La barra es una estimación: Claude Code no expone la ventana; se asume 200k, o 1M si ya la supera."><i><b style="width:${pct}%"></b></i><span>${k(ctx)}</span></span>`
+  }
+  const pill = (s) => `<span class="pill ${CLASS[s.status]}">${ICON[s.status]}${WORD[s.status]}</span>`
+  // Columna "Ahora": pregunta, herramienta en curso, tareas en background y agentes, o la primera línea de la última respuesta.
+  const doing = (s) => {
+    const extras = []
+    if (s.background.length) extras.push(`<span class="tag">${s.background.length === 1 ? `${esc(s.background[0].tool)} en background` : `${s.background.length} en background`}</span>`)
+    if (s.agents) extras.push(`<span class="tag">${s.agents} ${s.agents === 1 ? 'agente' : 'agentes'}</span>`)
+    if (s.status === 'waiting') return esc(s.waitingQuestion)
+    if (s.status === 'background') return `${extras.join('')}${esc(s.background[0].label)}`
+    if (s.status === 'busy') return `${s.currentTool ? `<code>${esc(s.currentTool)}</code>` : ''}${extras.join('')}${esc(firstLine(s.lastAnswer?.text)) || (s.currentTool ? '' : 'Pensando')}`
+    return `${extras.join('')}${esc(firstLine(s.lastAnswer?.text))}`
+  }
 
   let sessions = []
+  let sorted = []
   let selectedId = null
+  let peekOpen = false
+
+  const row = (s) => `
+    <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
+      ${ICON[s.status]}
+      <span class="who"><span class="name">${esc(s.name ?? s.cwd)}${src(s)}</span><span class="branch">${esc(s.branch ?? s.cwd)}</span></span>
+      <span class="doing">${doing(s)}</span>
+      <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
+      ${gauge(s.contextTokens)}
+      <span class="num r">${dur(Date.now() - s.startedAt)}</span>
+      <span class="num r">${s.prompts ? `<b>${s.prompts}</b> / ${s.turns}` : ''}</span>
+      <span class="num r">${k(s.outputTokens)}</span>
+      <span class="num r"><b>${dur(Date.now() - new Date(sinceOf(s)))}</b></span>
+    </div>`
+
+  const peek = (s) => `
+    <div class="head">${pill(s)}<h1>${esc(s.name ?? s.cwd)}</h1><button class="close" id="close" title="Cerrar (Esc)" aria-label="Cerrar">×</button></div>
+    ${s.title && s.title !== s.name ? `<section><h3>Título</h3>${esc(s.title)}</section>` : ''}
+    ${s.waitingQuestion ? `<section><div class="question">${esc(s.waitingQuestion)}</div></section>` : ''}
+    ${s.background.length ? `<section><h3>En background</h3>${s.background.map((b) => b.tool === 'Agent' ? `<div class="cmd">Agente: ${esc(b.label)}</div>` : `<pre class="cmd"><code class="language-bash">${esc(b.label)}</code></pre>`).join('')}</section>` : ''}
+    <section><h3>Última respuesta</h3><div class="md">${s.lastAnswer ? md(s.lastAnswer.text) : '<span class="prompt">Todavía no ha respondido</span>'}</div></section>
+    <section><h3>Tu último prompt</h3><div class="prompt">${esc(s.lastPrompt?.text ?? '')}</div></section>
+    ${s.editedFiles.length ? `<section><h3>Ficheros editados</h3><ul class="files">${s.editedFiles.map((f) => `<li><a href="#" data-file="${esc(f)}" title="Abrir en VS Code">${esc(f)}<span>abrir</span></a></li>`).join('')}</ul></section>` : ''}
+    <section><h3>Carpeta</h3><span class="path">${esc(s.cwd)}</span></section>`
 
   function render() {
-    const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
-    if (!sorted.some((s) => s.sessionId === selectedId)) selectedId = sorted.find((s) => s.status === 'waiting')?.sessionId ?? sorted[0]?.sessionId ?? null
-    const pending = sorted.filter((s) => s.status !== 'busy').length
-    document.title = `${pending ? `(${pending}) ` : ''}Sesiones de Claude Code`
-
-    const urgent = sorted.find((s) => s.status === 'waiting')
-    const banner = urgent ? `<div class="banner" data-id="${urgent.sessionId}">
-        <div class="line"><span>${nameOf(urgent)} necesita tu respuesta</span><span class="time">${ago(urgent.updatedAt)}</span></div>
-        <div class="why">${esc(urgent.waitingQuestion)}</div>
-      </div>` : ''
-    const groups = GROUPS.map(([status, label]) => {
-      const rows = sorted.filter((s) => s.status === status)
-      return rows.length ? `<section><h2>${label} · ${rows.length}</h2><div class="group">${rows.map((s) => `
-        <div class="row ${s.status}${s.sessionId === selectedId ? ' selected' : ''}" data-id="${s.sessionId}" title="${esc(s.cwd)}">
-          <span class="dot"></span><span class="name">${nameOf(s)}</span><span class="time">${ago(s.statusSince ?? s.updatedAt)}</span>
-          <span class="state">${state(s)}</span>
-          <span class="info">${info(s)}</span>
-        </div>`).join('')}</div></section>` : ''
-    }).join('')
-    document.getElementById('list').innerHTML = sorted.length ? banner + groups : '<div class="empty">No hay sesiones de Claude Code abiertas</div>'
-
+    sorted = [...sessions].sort((a, b) => groupOf(a) - groupOf(b) || b.updatedAt - a.updatedAt)
+    if (!sorted.some((s) => s.sessionId === selectedId)) selectedId = sorted[0]?.sessionId ?? null
+    const count = (g) => sorted.filter((s) => g.statuses.includes(s.status)).length
+    const pending = count(GROUPS[0]) + count(GROUPS[1])
+    document.title = `${pending ? `(${pending}) ` : ''}Claude Code Watcher`
+    document.getElementById('totals').innerHTML = GROUPS.map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
+    const cols = '<div class="cols"><span></span><span>Sesión</span><span>Ahora</span><span>Modelo</span><span>Contexto</span><span class="r">Abierta</span><span class="r" title="Prompts tuyos / turnos del modelo">Prompts</span><span class="r">Tokens</span><span class="r">Desde</span></div>'
+    document.getElementById('list').innerHTML = sorted.length
+      ? cols + GROUPS.map((g) => { const rows = sorted.filter((s) => g.statuses.includes(s.status)); return rows.length ? `<h2 class="${CLASS[g.statuses[0]]}">${g.label} <span>${rows.length}</span></h2>${rows.map(row).join('')}` : '' }).join('')
+      : '<div class="empty"><div><b>Ninguna sesión abierta</b>Abre Claude Code en una terminal y aparecerá aquí.</div></div>'
     const s = sorted.find((x) => x.sessionId === selectedId)
-    document.getElementById('detail').innerHTML = s ? `
-      <div class="${s.status}"><span class="title">${esc(s.name ?? s.cwd)}</span><span class="status">${state(s)} ${ago(s.statusSince)}</span></div>
-      <div class="meta">${esc(s.title ?? '')}${s.title ? ' · ' : ''}${esc(s.cwd)}${s.branch ? ` · ${esc(s.branch)}` : ''}</div>
-      <div class="meta">${info(s)} · abierta ${ago(s.startedAt)}${s.prompts ? ` · ${s.prompts} prompts, ${s.turns} turnos` : ''} · ${k(s.outputTokens)} tokens generados${s.agents ? ` · ${s.agents} agente${s.agents > 1 ? 's' : ''} en marcha` : ''}</div>
-      ${block('Pregunta', s.waitingQuestion)}
-      ${s.editedFiles.length ? `<div><div class="label">Ficheros editados</div><div class="block files">${s.editedFiles.map(esc).join('\n')}</div></div>` : ''}
-      ${block('Tu último prompt', s.lastPrompt?.text)}
-      ${block('Última respuesta', s.lastAnswer?.text)}` : ''
+    const open = peekOpen && s
+    document.getElementById('layout').classList.toggle('peek-open', !!open)
+    const aside = document.getElementById('peek')
+    aside.hidden = !open
+    if (open) {
+      aside.innerHTML = peek(s)
+      if (window.hljs) aside.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el))
+    }
   }
 
-  document.getElementById('list').addEventListener('click', (e) => {
-    const el = e.target.closest('[data-id]')
-    if (el) { selectedId = el.dataset.id; render() }
+  const list = document.getElementById('list')
+  const select = (id, open) => { selectedId = id; if (open !== undefined) peekOpen = open; render(); list.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' }) }
+  list.addEventListener('click', (e) => { const el = e.target.closest('.row'); if (el) select(el.dataset.id, true) })
+  document.getElementById('peek').addEventListener('click', (e) => {
+    if (e.target.closest('#close')) select(selectedId, false)
+    const a = e.target.closest('a[data-file]')
+    if (a) {
+      e.preventDefault()
+      fetch('/open', { method: 'POST', body: JSON.stringify({ sessionId: selectedId, file: a.dataset.file }) })
+        .then((r) => { a.querySelector('span').textContent = r.ok ? 'abierto' : 'no se pudo abrir' })
+    }
   })
-  new EventSource('/events').onmessage = (e) => { sessions = JSON.parse(e.data); render() }
-  setInterval(render, 30000)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return
+    const i = sorted.findIndex((s) => s.sessionId === selectedId)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (sorted.length) select(sorted[(i + (e.key === 'ArrowDown' ? 1 : -1) + sorted.length) % sorted.length].sessionId) }
+    else if (e.key === 'Enter' && selectedId) select(selectedId, true)
+    else if (e.key === 'Escape') select(selectedId, false)
+  })
+
+  const live = document.getElementById('live')
+  const es = new EventSource('/events')
+  es.onmessage = (e) => { sessions = JSON.parse(e.data); live.textContent = 'en directo'; live.classList.remove('off'); render() }
+  es.onerror = () => { live.textContent = 'sin conexión'; live.classList.add('off') }
+  const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
+  setInterval(tick, 30000)
+  tick()
 </script>
 </body>
 </html>

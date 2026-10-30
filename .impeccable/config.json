@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-30T14:47:14.276Z",
+        "reason": "El usuario pidió estilo Linear, cuya tipografía de interfaz es Inter"
+      }
+    ]
+  }
+}

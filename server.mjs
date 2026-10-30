@@ -3,7 +3,7 @@
 // Sin dependencias. `node server.mjs` o `node server.mjs --once` (imprime el JSON y sale).
 import { readFileSync, readdirSync, watch, openSync, readSync, closeSync, statSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
@@ -55,14 +55,17 @@ function* linesFromEnd(path) {
 const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) + '…' : s)
 
 // Recorre el transcript de atrás adelante y saca lo que la tarjeta muestra.
-function readTranscript(sessionId) {
+function readTranscript(sessionId, cwd = '') {
   const path = findTranscript(sessionId)
   const out = {
     title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
     model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [], outputTokens: 0,
+    background: [], // tareas lanzadas con run_in_background que aún no han notificado su fin
   }
   if (!path) return out
   const resolved = new Set()
+  const notified = new Set() // tool_use ids y task ids de tareas en background cuya notificación de fin ya llegó, o paradas con TaskStop
+  const taskOf = new Map() // tool_use id -> task id, del resultado "Command running in background with ID: x"
   let pendingTool = null
   let scanned = 0
   for (const line of linesFromEnd(path)) {
@@ -75,7 +78,10 @@ function readTranscript(sessionId) {
     }
     scanned++
     if (r.type === 'ai-title' && !out.title) out.title = r.aiTitle
-    if (r.type === 'file-history-delta' && r.trackingPath && out.editedFiles.length < 8 && !out.editedFiles.includes(r.trackingPath)) out.editedFiles.push(r.trackingPath)
+    if (r.type === 'file-history-delta' && r.trackingPath && out.editedFiles.length < 8) {
+      const p = r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + '\\') ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
+      if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
+    }
     if (r.isSidechain) continue
     const content = r.message?.content
     if (r.type === 'user') {
@@ -87,7 +93,16 @@ function readTranscript(sessionId) {
         out.prompts = (r.turnPosition?.promptIndex ?? -1) + 1
         out.turns = (r.turnPosition?.turnIndex ?? -1) + 1
       }
-      if (Array.isArray(content)) for (const c of content) if (c.type === 'tool_result') resolved.add(c.tool_use_id)
+      if (Array.isArray(content)) {
+        for (const c of content) {
+          if (c.type !== 'tool_result') continue
+          resolved.add(c.tool_use_id)
+          const body = typeof c.content === 'string' ? c.content : Array.isArray(c.content) ? c.content.map((x) => x.text ?? '').join('\n') : ''
+          const id = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
+          if (id) taskOf.set(c.tool_use_id, id)
+        }
+      }
+      for (const m of text.matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) notified.add(m[1])
     }
     if (r.type === 'assistant' && Array.isArray(content)) {
       const u = r.message.usage
@@ -98,7 +113,12 @@ function readTranscript(sessionId) {
       if (r.message.stop_reason === 'end_turn' && !out.lastTurnEndedAt) out.lastTurnEndedAt = r.timestamp
       for (const c of content) {
         if (c.type === 'text' && c.text.trim() && !out.lastAnswer) out.lastAnswer = { text: clip(c.text.trim()), at: r.timestamp }
-        if (c.type === 'tool_use' && !resolved.has(c.id)) {
+        if (c.type === 'tool_use' && c.name === 'TaskStop') notified.add(c.input?.task_id ?? c.input?.shell_id)
+        if (c.type === 'tool_use' && c.input?.run_in_background === true && !notified.has(c.id) && !notified.has(taskOf.get(c.id))) {
+          const isAgent = c.name === 'Agent'
+          if (isAgent) out.agents++
+          out.background.push({ tool: c.name, label: clip(String(isAgent ? c.input.description ?? '' : c.input.command ?? c.input.description ?? '')).split('\n')[0], at: r.timestamp })
+        } else if (c.type === 'tool_use' && !resolved.has(c.id)) {
           if (c.name === 'Agent') out.agents++
           if (!pendingTool) {
             pendingTool = c
@@ -148,6 +168,7 @@ function gitBranch(cwd) {
   try {
     let gitDir = join(cwd, '.git')
     if (!statSync(gitDir).isDirectory()) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
+    if (/^(\\\\|\/\/)/.test(gitDir)) return null // una ruta UNC haría una petición de red con credenciales
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
     return head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)
   } catch {
@@ -176,10 +197,11 @@ function readSessions() {
     }
     // Fuera las sesiones que no son tuyas: los `claude -p` de plugins (remember-summarizer…) corren desde la carpeta temporal.
     if (s.kind !== 'interactive' || !isAlive(s.pid) || !s.cwd || s.cwd.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
-    const t = readTranscript(s.sessionId)
+    const t = readTranscript(s.sessionId, s.cwd)
     // shortcut: el registro solo dice busy/idle; la espera de permiso no se ve, solo la de AskUserQuestion. Revisar si el registro gana un estado "waiting".
-    const status = t.waitingQuestion ? 'waiting' : s.status ?? 'busy' // recién arrancada aún no tiene status
-    list.push({ ...s, ...t, status, statusSince: t.waitingQuestion ? null : s.statusUpdatedAt, branch: gitBranch(s.cwd) })
+    // El registro trae busy/idle y, a veces, valores transitorios; para la página todo lo que no es idle es "trabajando".
+    const status = t.waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : t.background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
+    list.push({ ...s, ...t, status, rawStatus: s.status ?? null, statusSince: t.waitingQuestion ? null : s.statusUpdatedAt, branch: gitBranch(s.cwd) })
   }
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }
@@ -190,7 +212,7 @@ function notifyChanges(sessions) {
   for (const s of sessions) {
     const prev = lastStatus.get(s.sessionId)
     lastStatus.set(s.sessionId, s.status)
-    if (prev === undefined || prev === s.status || s.status === 'busy') continue
+    if (prev === undefined || prev === s.status || s.status === 'busy' || s.status === 'background') continue
     const text = String(s.waitingQuestion || s.lastAnswer?.text || 'Ha terminado').split('\n').find((l) => l.trim()) ?? 'Ha terminado'
     try {
       spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(HERE, 'notify.ps1')], {
@@ -209,6 +231,8 @@ if (process.argv.includes('--once')) {
 }
 
 // --- servidor ---
+// Code.exe real (bin\code.cmd necesitaría cmd.exe): se busca una vez en el PATH.
+const CODE_EXE = (process.env.PATH ?? '').split(';').map((d) => join(d, '..', 'Code.exe')).find((p) => existsSync(p)) ?? null
 const clients = new Set()
 let snapshot = readSessions()
 let timer = null
@@ -226,6 +250,31 @@ watch(PROJECTS, { recursive: true }, (_, file) => file?.endsWith('.jsonl') && re
 setInterval(refresh, 15_000) // por si un watcher se pierde algo y para el "hace X min"
 
 createServer((req, res) => {
+  // Solo desde el propio equipo: un sitio remoto no puede leer esto vía DNS rebinding.
+  if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host)) {
+    res.writeHead(403).end()
+    return
+  }
+  // Abrir en VS Code un fichero editado: solo los que el watcher ha listado para esa sesión.
+  if (req.method === 'POST' && req.url === '/open') {
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      try {
+        const { sessionId, file } = JSON.parse(body)
+        const s = snapshot.find((x) => x.sessionId === sessionId)
+        if (!s || !s.editedFiles.includes(file)) throw new Error('fichero no listado')
+        const abs = isAbsolute(file) ? file : join(s.cwd, file)
+        if (!statSync(abs).isFile()) throw new Error('no es un fichero')
+        if (!CODE_EXE) throw new Error('VS Code no está en el PATH')
+        spawn(CODE_EXE, ['--goto', abs], { stdio: 'ignore', windowsHide: true }).unref() // sin shell: la ruta no se interpreta
+        res.writeHead(204).end()
+      } catch (err) {
+        res.writeHead(400).end(err.message)
+      }
+    })
+    return
+  }
   if (req.url === '/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     res.write(`data: ${JSON.stringify(snapshot)}\n\n`)
@@ -233,6 +282,13 @@ createServer((req, res) => {
     req.on('close', () => clients.delete(res))
     return
   }
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-  res.end(readFileSync(join(HERE, 'index.html')))
+  // Ficheros propios (index.html, icon.svg…): solo nombres planos de esta carpeta.
+  const file = req.url === '/' ? 'index.html' : req.url.slice(1).split('?')[0]
+  const type = { html: 'text/html; charset=utf-8', svg: 'image/svg+xml', css: 'text/css', js: 'text/javascript' }[file.split('.').pop()]
+  if (!type || !/^[\w.-]+$/.test(file) || !existsSync(join(HERE, file))) {
+    res.writeHead(404).end()
+    return
+  }
+  res.writeHead(200, { 'Content-Type': type })
+  res.end(readFileSync(join(HERE, file)))
 }).listen(PORT, '127.0.0.1', () => console.log(`Centro de sesiones en http://localhost:${PORT}`))
