@@ -1,6 +1,7 @@
-// Centro de sesiones de Claude Code: lee ~/.claude/sessions (estado vivo) y
-// ~/.claude/projects (transcripts) y los sirve en localhost con SSE.
-// Sin dependencias. `node server.mjs` o `node server.mjs --once` (imprime el JSON y sale).
+#!/usr/bin/env node
+// Claude Code Watcher: lee ~/.claude/sessions (estado vivo) y ~/.claude/projects
+// (transcripts) y los sirve en localhost con SSE.
+// Sin dependencias. `npx cc-suricata`, `--once` (imprime el JSON y sale), `--no-open` (no abre el navegador).
 import { readFileSync, readdirSync, watch, openSync, readSync, closeSync, statSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
@@ -210,6 +211,7 @@ function readSessions() {
 // --- notificaciones de Windows al cambiar de estado ---
 const lastStatus = new Map()
 function notifyChanges(sessions) {
+  if (process.platform !== 'win32') return // shortcut: el aviso nativo es solo Windows; en macOS valdría osascript, en Linux notify-send
   for (const s of sessions) {
     const prev = lastStatus.get(s.sessionId)
     lastStatus.set(s.sessionId, s.status)
@@ -292,4 +294,10 @@ createServer((req, res) => {
   }
   res.writeHead(200, { 'Content-Type': type })
   res.end(readFileSync(join(HERE, file)))
-}).listen(PORT, '127.0.0.1', () => console.log(`Centro de sesiones en http://localhost:${PORT}`))
+}).listen(PORT, '127.0.0.1', () => {
+  const url = `http://localhost:${PORT}`
+  console.log(`Claude Code Watcher en ${url}`)
+  if (process.argv.includes('--no-open')) return
+  const open = { win32: ['cmd.exe', ['/c', 'start', '', url]], darwin: ['open', [url]] }[process.platform] ?? ['xdg-open', [url]]
+  spawn(...open, { stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref()
+})

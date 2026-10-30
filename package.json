@@ -1,0 +1,14 @@
+{
+  "name": "cc-suricata",
+  "version": "0.1.0",
+  "description": "Claude Code Watcher: todas tus sesiones de Claude Code en una página local, con aviso cuando una termina o te pregunta",
+  "type": "module",
+  "bin": { "cc-suricata": "./server.mjs" },
+  "files": ["server.mjs", "index.html", "icon.svg", "notify.ps1"],
+  "scripts": { "start": "node server.mjs" },
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "git+https://github.com/mabuenox/cc-suricata.git" },
+  "keywords": ["claude-code", "claude", "sessions", "dashboard", "watcher"],
+  "author": "mabuenox",
+  "license": "MIT"
+}
