@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.svg" width="128" height="128" alt="cc-suricata mascot: Claude Code's Clawd standing upright like a meerkat on watch">
+</p>
+
 # cc-suricata · Claude Code Watcher
 
 All your Claude Code sessions on one local page, at a glance: what each one is doing, which one is waiting for you, which one is asking you something, model, context usage, background tasks and agents. Sends a Windows notification when a session finishes its turn or asks you a question.
