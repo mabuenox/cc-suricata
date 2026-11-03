@@ -60,7 +60,7 @@ function readTranscript(sessionId, cwd = '') {
   const path = findTranscript(sessionId)
   const out = {
     title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
-    model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [], outputTokens: 0,
+    model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [],
     background: [], // tareas lanzadas con run_in_background que aún no han notificado su fin
     agentsAt: [], // timestamps de los Agent en primer plano sin resultado
     pendingAt: null, // timestamp de la herramienta en curso
@@ -134,16 +134,16 @@ function readTranscript(sessionId, cwd = '') {
     // Lo esencial está en las últimas líneas; los ficheros editados pueden estar más atrás, pero no vale la pena leer todo el transcript.
     if (out.lastPrompt && out.lastAnswer && out.title && out.lastTurnEndedAt && (out.editedFiles.length >= 8 || scanned > 1500)) break
   }
-  out.outputTokens = outputTokens(path)
   return out
 }
 
-// Tokens generados por la sesión: suma acumulada, leyendo solo lo que el transcript ha crecido desde la última vez.
-const tokenTally = new Map() // path -> { offset, total, rest }
-function outputTokens(path) {
-  const t = tokenTally.get(path) ?? { offset: 0, total: 0, rest: '' }
+// Pasada por todo el transcript, incremental (solo lo que ha crecido desde la última vez): tokens generados
+// y eventos de la línea de tiempo, tus prompts ('p') y fines de turno ('e'), con su instante en ms.
+const tallies = new Map() // path -> { offset, total, events, rest }
+function tally(path) {
+  const t = tallies.get(path) ?? { offset: 0, total: 0, events: [], rest: '' }
   const size = statSync(path).size
-  if (size < t.offset) Object.assign(t, { offset: 0, total: 0, rest: '' }) // fichero reescrito
+  if (size < t.offset) Object.assign(t, { offset: 0, total: 0, events: [], rest: '' }) // fichero reescrito
   if (size > t.offset) {
     const buf = Buffer.alloc(size - t.offset)
     const fd = openSync(path, 'r')
@@ -155,15 +155,60 @@ function outputTokens(path) {
     const lines = (t.rest + buf.toString('utf8')).split('\n')
     t.rest = lines.pop() // última línea, quizá a medias
     for (const line of lines) {
-      if (!line.includes('"output_tokens"')) continue
+      if (!line.includes('"output_tokens"') && !line.includes('"kind":"human"') && !line.includes('"stop_reason":"end_turn"')) continue
       try {
-        t.total += JSON.parse(line).message?.usage?.output_tokens ?? 0
+        const r = JSON.parse(line)
+        t.total += r.message?.usage?.output_tokens ?? 0
+        if (r.isSidechain) continue
+        // shortcut: un turno que acaba en AskUserQuestion no es end_turn; esa espera se dibuja como trabajo. Revisar si el transcript marca esa parada.
+        if (r.type === 'user' && r.origin?.kind === 'human') t.events.push([Date.parse(r.timestamp), 'p'])
+        else if (r.type === 'assistant' && r.message?.stop_reason === 'end_turn') t.events.push([Date.parse(r.timestamp), 'e'])
       } catch {}
     }
     t.offset = size
-    tokenTally.set(path, t)
+    tallies.set(path, t)
   }
-  return t.total
+  return t
+}
+
+// Sesiones cerradas: history.jsonl (una línea por prompt con project, sessionId y timestamp) es el índice barato;
+// del transcript, que ya no cambia, se lee una sola vez la cola para título, última respuesta y modelo.
+const history = { size: 0, bySession: new Map() } // sessionId -> { project, first, firstAt, lastAt, n }
+function readHistory() {
+  try {
+    const path = join(CLAUDE, 'history.jsonl')
+    const size = statSync(path).size
+    if (size === history.size) return history.bySession
+    history.size = size
+    history.bySession = new Map()
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      let r
+      try {
+        r = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const h = history.bySession.get(r.sessionId) ?? { project: r.project, first: r.display, firstAt: r.timestamp, n: 0 }
+      h.n++
+      h.lastAt = r.timestamp
+      history.bySession.set(r.sessionId, h)
+    }
+  } catch {}
+  return history.bySession
+}
+const closedCache = new Map() // sessionId -> readTranscript(), o null si ya no hay transcript
+function recentSessions(live) {
+  const liveIds = new Set(live.map((s) => s.sessionId))
+  const out = []
+  for (const [id, h] of [...readHistory()].sort((a, b) => b[1].lastAt - a[1].lastAt)) {
+    if (liveIds.has(id) || !h.project || h.project.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
+    if (!closedCache.has(id)) closedCache.set(id, findTranscript(id) ? readTranscript(id, h.project) : null)
+    const t = closedCache.get(id)
+    if (!t?.lastAnswer) continue // sesiones vacías (solo un /clear, un /resume…) no aportan nada
+    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.first.split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.n, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: null })
+    if (out.length === 20) break
+  }
+  return out
 }
 
 // Rama git de la carpeta, sin lanzar git: lee .git/HEAD (o el gitdir de un worktree).
@@ -202,6 +247,8 @@ function readSessions() {
     // Fuera las sesiones que no son tuyas: los `claude -p` de plugins (remember-summarizer…) corren desde la carpeta temporal.
     if (s.kind !== 'interactive' || !isAlive(s.pid) || !s.cwd || s.cwd.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
     const t = readTranscript(s.sessionId, s.cwd)
+    const path = findTranscript(s.sessionId)
+    const { total: outputTokens, events } = path ? tally(path) : { total: 0, events: [] }
     // Una tarea en background es hija del proceso de Claude Code: si se lanzó antes de que arrancara el proceso actual (sesión reanudada), murió con el anterior.
     const alive = (at) => new Date(at).getTime() >= s.startedAt
     t.background = t.background.filter((b) => alive(b.at))
@@ -210,7 +257,8 @@ function readSessions() {
     // shortcut: el registro solo dice busy/idle; la espera de permiso no se ve, solo la de AskUserQuestion. Revisar si el registro gana un estado "waiting".
     // El registro trae busy/idle y, a veces, valores transitorios; para la página todo lo que no es idle es "trabajando".
     const status = t.waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : t.background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
-    list.push({ ...s, ...t, status, rawStatus: s.status ?? null, statusSince: t.waitingQuestion ? null : s.statusUpdatedAt, branch: gitBranch(s.cwd) })
+    // Los eventos anteriores al proceso actual (sesión reanudada) no forman parte de esta línea de tiempo.
+    list.push({ ...s, ...t, outputTokens, events: events.filter(([at]) => at >= s.startedAt).slice(-400), status, rawStatus: s.status ?? null, statusSince: t.waitingQuestion ? null : s.statusUpdatedAt, branch: gitBranch(s.cwd) })
   }
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }
@@ -235,8 +283,13 @@ function notifyChanges(sessions) {
   }
 }
 
+const snap = () => {
+  const sessions = readSessions()
+  return { sessions, recent: recentSessions(sessions) }
+}
+
 if (process.argv.includes('--once')) {
-  console.log(JSON.stringify(readSessions(), null, 2))
+  console.log(JSON.stringify(snap(), null, 2))
   process.exit(0)
 }
 
@@ -244,13 +297,13 @@ if (process.argv.includes('--once')) {
 // Code.exe real (bin\code.cmd necesitaría cmd.exe): se busca una vez en el PATH.
 const CODE_EXE = (process.env.PATH ?? '').split(';').map((d) => join(d, '..', 'Code.exe')).find((p) => existsSync(p)) ?? null
 const clients = new Set()
-let snapshot = readSessions()
+let snapshot = snap()
 let timer = null
 function refresh() {
   clearTimeout(timer)
   timer = setTimeout(() => {
-    snapshot = readSessions()
-    notifyChanges(snapshot)
+    snapshot = snap()
+    notifyChanges(snapshot.sessions)
     const data = `data: ${JSON.stringify(snapshot)}\n\n`
     for (const res of clients) res.write(data)
   }, 300)
@@ -272,7 +325,7 @@ createServer((req, res) => {
     req.on('end', () => {
       try {
         const { sessionId, file } = JSON.parse(body)
-        const s = snapshot.find((x) => x.sessionId === sessionId)
+        const s = [...snapshot.sessions, ...snapshot.recent].find((x) => x.sessionId === sessionId)
         if (!s || !s.editedFiles.includes(file)) throw new Error('fichero no listado')
         const abs = isAbsolute(file) ? file : join(s.cwd, file)
         if (!statSync(abs).isFile()) throw new Error('no es un fichero')
@@ -283,6 +336,13 @@ createServer((req, res) => {
         res.writeHead(400).end(err.message)
       }
     })
+    return
+  }
+  // Línea de tiempo de una sesión cerrada: su transcript se lee entero solo cuando la abres.
+  if (req.url.startsWith('/timeline?id=')) {
+    const s = snapshot.recent.find((x) => x.sessionId === req.url.slice(13))
+    res.writeHead(s ? 200 : 404, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(s ? tally(findTranscript(s.sessionId)).events : null))
     return
   }
   if (req.url === '/events') {

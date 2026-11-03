@@ -47,14 +47,15 @@
   .cols { position: sticky; top: 0; z-index: 1; height: 32px; font-size: 12px; color: var(--faint); background: var(--bg); border-bottom: 1px solid var(--border); }
   .cols .r, .row .r { text-align: right; }
   .list h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 20px; font-size: 13.5px; font-weight: 600; background: var(--raised); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
-  .list h2.need { color: var(--need); } .list h2.done { color: var(--done); } .list h2.work { color: var(--work); }
+  .list h2.need { color: var(--need); } .list h2.done { color: var(--done); } .list h2.work { color: var(--work); } .list h2.off { color: var(--muted); }
   .list h2 span { color: var(--muted); font-weight: 500; margin-left: 2px; }
   .row { padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
   .row:hover { background: var(--hover); }
   .row.selected { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
   .row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .row svg { width: 14px; height: 14px; display: block; }
-  .need svg { color: var(--need); } .done svg { color: var(--done); } .work svg { color: var(--work); }
+  .need svg { color: var(--need); } .done svg { color: var(--done); } .work svg { color: var(--work); } .off svg { color: var(--faint); }
+  .row.off .name { color: var(--muted); }
   .work svg .spin { animation: pulse 2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
   @media (prefers-reduced-motion: reduce) { .work svg .spin { animation: none; } }
@@ -106,6 +107,13 @@
   .cmd:last-child { margin-bottom: 0; }
   .src { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; color: var(--muted); vertical-align: 1px; }
   .path { color: var(--muted); font: 12.5px var(--mono); }
+  /* Línea de tiempo: trabajando (amarillo) / esperándote (verde); una pausa larga se dibuja acortada y punteada */
+  .tl { display: flex; gap: 1px; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border); }
+  .tl i { min-width: 2px; } .tl .work { background: var(--work); } .tl .wait { background: var(--done); }
+  .tl .pause { background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); }
+  .tlsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .tlsum .work { color: var(--work); } .tlsum .wait { color: var(--done); }
+  .copy { float: right; margin-left: 10px; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted); font: 12px Inter; padding: 2px 8px; cursor: pointer; }
+  .copy:hover { color: var(--text); } .copy:focus-visible { outline: 2px solid var(--accent); }
 
   @media (max-width: 1100px) {
     .layout.peek-open { grid-template-columns: 0 minmax(0, 1fr); }
@@ -138,20 +146,22 @@
     idle: '<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="7"/><path d="M5.3 4.3L8.2 7l-2.9 2.7" stroke="#191a1f" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     busy: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor"><circle cx="7" cy="7" r="6" stroke-width="1.4"/><path class="spin" d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="currentColor" stroke="none"/></svg>',
     background: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor"><circle cx="7" cy="7" r="6" stroke-width="1.4" stroke-dasharray="2.2 2"/><path class="spin" d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="currentColor" stroke="none"/></svg>',
+    closed: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor"><circle cx="7" cy="7" r="6" stroke-width="1.4"/></svg>',
   }
-  const CLASS = { waiting: 'need', idle: 'done', busy: 'work', background: 'work' }
-  const WORD = { waiting: 'Te pregunta', idle: 'Esperándote', busy: 'Trabajando', background: 'En background' }
+  const CLASS = { waiting: 'need', idle: 'done', busy: 'work', background: 'work', closed: 'off' }
+  const WORD = { waiting: 'Te pregunta', idle: 'Esperándote', busy: 'Trabajando', background: 'En background', closed: 'Cerrada' }
   const GROUPS = [
     { statuses: ['waiting'], label: 'Te necesitan', one: 'te pregunta', many: 'te preguntan' },
     { statuses: ['idle'], label: 'Esperándote', one: 'esperándote', many: 'esperándote' },
     { statuses: ['busy', 'background'], label: 'Trabajando', one: 'trabajando', many: 'trabajando' },
+    { statuses: ['closed'], label: 'Recientes' },
   ]
   const groupOf = (s) => GROUPS.findIndex((g) => g.statuses.includes(s.status))
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   const md = (text) => window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : esc(text)
   const k = (n) => n == null ? '' : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
   const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h` }
-  const sinceOf = (s) => s.status === 'busy' ? s.lastPrompt?.at ?? s.statusSince : s.status === 'background' ? s.background[0]?.at ?? s.updatedAt : s.status === 'waiting' ? s.updatedAt : s.statusSince ?? s.updatedAt
+  const sinceOf = (s) => s.status === 'closed' ? s.updatedAt : s.status === 'busy' ? s.lastPrompt?.at ?? s.statusSince : s.status === 'background' ? s.background[0]?.at ?? s.updatedAt : s.status === 'waiting' ? s.updatedAt : s.statusSince ?? s.updatedAt
   const modelOf = (s) => s.model?.split('-')[1] ?? ''
   const SRC = { 'claude-desktop': 'Desktop', 'claude-vscode': 'VS Code', 'sdk-py': 'SDK', 'sdk-ts': 'SDK' }
   const src = (s) => SRC[s.entrypoint] ? `<span class="src">${SRC[s.entrypoint]}</span>` : ''
@@ -161,6 +171,31 @@
     if (!ctx) return '<span></span>'
     const pct = Math.min(100, Math.round((ctx / (ctx > 200_000 ? 1_000_000 : 200_000)) * 100))
     return `<span class="gauge ${pct > 85 ? 'full' : pct > 60 ? 'high' : ''}" title="${k(ctx)} tokens en contexto. La barra es una estimación: Claude Code no expone la ventana; se asume 200k, o 1M si ya la supera."><i><b style="width:${pct}%"></b></i><span>${k(ctx)}</span></span>`
+  }
+  const time = (ms) => new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  const PAUSE = 3600e3 // una espera de más de una hora es una pausa: no suma como espera y se dibuja acortada
+  const timeline = (ev, s) => {
+    if (!ev) return '<span class="prompt">Cargando…</span>'
+    const segs = []
+    let open = null
+    const close = (to) => { if (open && to > open.from) segs.push({ ...open, to, d: to - open.from }); open = null }
+    for (const [at, kind] of ev) { close(at); open = { kind: kind === 'p' ? 'work' : 'wait', from: at } }
+    if (s.status !== 'closed') close(Date.now())
+    if (!segs.length) return '<span class="prompt">Sin turnos todavía</span>'
+    let work = 0, wait = 0, pauses = 0
+    for (const g of segs) { if (g.kind === 'work') work += g.d; else if (g.d > PAUSE) pauses++; else wait += g.d }
+    const bar = segs.map((g) => { const pause = g.kind === 'wait' && g.d > PAUSE; return `<i class="${g.kind}${pause ? ' pause' : ''}" style="flex:${pause ? PAUSE / 4 : g.d}" title="${pause ? 'Pausa' : g.kind === 'work' ? 'Trabajando' : 'Esperándote'} ${dur(g.d)} · desde las ${time(g.from)}"></i>` }).join('')
+    const pct = Math.round((work / (work + wait || 1)) * 100)
+    return `<div class="tl">${bar}</div><div class="tlsum">${segs.filter((g) => g.kind === 'work').length} turnos · <b class="work">trabajando ${dur(work)}</b> (${pct} %) · <b class="wait">esperándote ${dur(wait)}</b>${pauses ? ` · ${pauses} ${pauses === 1 ? 'pausa' : 'pausas'}` : ''}</div>`
+  }
+  const closedEvents = new Map() // sessionId -> eventos de una sesión cerrada, pedidos al abrirla
+  const eventsOf = (s) => {
+    if (s.status !== 'closed') return s.events
+    if (!closedEvents.has(s.sessionId)) {
+      closedEvents.set(s.sessionId, null)
+      fetch(`/timeline?id=${s.sessionId}`).then((r) => r.json()).then((ev) => { closedEvents.set(s.sessionId, ev); render() })
+    }
+    return closedEvents.get(s.sessionId)
   }
   const pill = (s) => `<span class="pill ${CLASS[s.status]}">${ICON[s.status]}${WORD[s.status]}</span>`
   // Columna "Ahora": pregunta, herramienta en curso, tareas en background y agentes, o la primera línea de la última respuesta.
@@ -186,7 +221,7 @@
       <span class="doing">${doing(s)}</span>
       <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
       ${gauge(s.contextTokens)}
-      <span class="num r">${dur(Date.now() - s.startedAt)}</span>
+      <span class="num r">${dur((s.status === 'closed' ? s.updatedAt : Date.now()) - s.startedAt)}</span>
       <span class="num r">${s.prompts ? `<b>${s.prompts}</b> / ${s.turns}` : ''}</span>
       <span class="num r">${k(s.outputTokens)}</span>
       <span class="num r"><b>${dur(Date.now() - new Date(sinceOf(s)))}</b></span>
@@ -196,6 +231,9 @@
     <div class="head">${pill(s)}<h1>${esc(s.name ?? s.cwd)}</h1><button class="close" id="close" title="Cerrar (Esc)" aria-label="Cerrar">×</button></div>
     ${s.title && s.title !== s.name ? `<section><h3>Título</h3>${esc(s.title)}</section>` : ''}
     ${s.waitingQuestion ? `<section><div class="question">${esc(s.waitingQuestion)}</div></section>` : ''}
+    ${s.status === 'closed' ? `<section><h3>Reanudar<button class="copy" id="copy">copiar</button></h3><pre class="cmd"><code class="language-bash">cd "${esc(s.cwd)}"
+claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
+    <section><h3>Línea de tiempo</h3>${timeline(eventsOf(s), s)}</section>
     ${s.background.length ? `<section><h3>En background</h3>${s.background.map((b) => b.tool === 'Agent' ? `<div class="cmd">Agente: ${esc(b.label)}</div>` : `<pre class="cmd"><code class="language-bash">${esc(b.label)}</code></pre>`).join('')}</section>` : ''}
     <section><h3>Última respuesta</h3><div class="md">${s.lastAnswer ? md(s.lastAnswer.text) : '<span class="prompt">Todavía no ha respondido</span>'}</div></section>
     <section><h3>Tu último prompt</h3><div class="prompt">${esc(s.lastPrompt?.text ?? '')}</div></section>
@@ -208,7 +246,7 @@
     const count = (g) => sorted.filter((s) => g.statuses.includes(s.status)).length
     const pending = count(GROUPS[0]) + count(GROUPS[1])
     document.title = `${pending ? `(${pending}) ` : ''}Claude Code Suricata`
-    document.getElementById('totals').innerHTML = GROUPS.map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
+    document.getElementById('totals').innerHTML = GROUPS.slice(0, 3).map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
     const cols = '<div class="cols"><span></span><span>Sesión</span><span>Ahora</span><span>Modelo</span><span>Contexto</span><span class="r">Abierta</span><span class="r" title="Prompts tuyos / turnos del modelo">Prompts</span><span class="r">Tokens</span><span class="r">Desde</span></div>'
     document.getElementById('list').innerHTML = sorted.length
       ? cols + GROUPS.map((g) => { const rows = sorted.filter((s) => g.statuses.includes(s.status)); return rows.length ? `<h2 class="${CLASS[g.statuses[0]]}">${g.label} <span>${rows.length}</span></h2>${rows.map(row).join('')}` : '' }).join('')
@@ -229,6 +267,11 @@
   list.addEventListener('click', (e) => { const el = e.target.closest('.row'); if (el) select(el.dataset.id, true) })
   document.getElementById('peek').addEventListener('click', (e) => {
     if (e.target.closest('#close')) select(selectedId, false)
+    const copy = e.target.closest('#copy')
+    if (copy) {
+      const s = sorted.find((x) => x.sessionId === selectedId)
+      navigator.clipboard.writeText(`cd "${s.cwd}"\nclaude --resume ${s.sessionId}`).then(() => { copy.textContent = 'copiado' })
+    }
     const a = e.target.closest('a[data-file]')
     if (a) {
       e.preventDefault()
@@ -246,7 +289,7 @@
 
   const live = document.getElementById('live')
   const es = new EventSource('/events')
-  es.onmessage = (e) => { sessions = JSON.parse(e.data); live.textContent = 'en directo'; live.classList.remove('off'); render() }
+  es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; live.textContent = 'en directo'; live.classList.remove('off'); render() }
   es.onerror = () => { live.textContent = 'sin conexión'; live.classList.add('off') }
   const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
   setInterval(tick, 30000)

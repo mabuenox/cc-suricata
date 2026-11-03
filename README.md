@@ -28,7 +28,8 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 
 - Groups: *Need you* (a session is asking you a question), *Waiting for you* (turn finished) and *Working* (running, or with background tasks).
 - Per session: name, git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
-- Panel: last answer rendered as markdown, last prompt, background commands, edited files.
+- Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
+- *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
 
 ## How it works
 
@@ -47,6 +48,8 @@ From those two sources it derives, per session:
 - **Generated tokens**: the sum of `output_tokens`, kept incrementally per transcript (only the bytes appended since the last read are parsed).
 - **Edited files**: the last eight `file-history-delta` paths, made relative to the session folder.
 - **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file), no `git` process.
+- **Timeline**: your prompts and `end_turn` messages, collected in the same incremental pass as the token tally. A prompt opens a *working* segment, an `end_turn` opens a *waiting* one; waits longer than an hour count as pauses. Events older than the current process are ignored, so a resumed session starts a fresh timeline.
+- **Recent sessions**: `~/.claude/history.jsonl` (one line per prompt: project, session id, timestamp) is the index; the transcript tail is read once per closed session for title, last answer and model, and its full timeline only when you open it.
 
 ### Technical decisions
 
