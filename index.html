@@ -108,8 +108,8 @@
   .src { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; color: var(--muted); vertical-align: 1px; }
   .path { color: var(--muted); font: 12.5px var(--mono); }
   /* Línea de tiempo: trabajando (amarillo) / esperándote (verde); una pausa larga se dibuja acortada y punteada */
-  .tl { display: flex; gap: 1px; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border); }
-  .tl i { min-width: 2px; } .tl .work { background: var(--work); } .tl .wait { background: var(--done); }
+  .tl { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border); }
+  .tl .work { background: var(--work); } .tl .wait { background: var(--done); }
   .tl .pause { background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); }
   .tlsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .tlsum .work { color: var(--work); } .tlsum .wait { color: var(--done); }
   .copy { float: right; margin-left: 10px; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted); font: 12px Inter; padding: 2px 8px; cursor: pointer; }
@@ -289,7 +289,7 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
 
   const live = document.getElementById('live')
   const es = new EventSource('/events')
-  es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; live.textContent = 'en directo'; live.classList.remove('off'); render() }
+  es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'en directo'; live.classList.remove('off'); render() }
   es.onerror = () => { live.textContent = 'sin conexión'; live.classList.add('off') }
   const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
   setInterval(tick, 30000)

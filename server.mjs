@@ -201,7 +201,8 @@ function recentSessions(live) {
   const liveIds = new Set(live.map((s) => s.sessionId))
   const out = []
   for (const [id, h] of [...readHistory()].sort((a, b) => b[1].lastAt - a[1].lastAt)) {
-    if (liveIds.has(id) || !h.project || h.project.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
+    if (liveIds.has(id)) { closedCache.delete(id); continue } // reanudada: lo cacheado quedará viejo cuando vuelva a cerrarse
+    if (!h.project || h.project.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
     if (!closedCache.has(id)) closedCache.set(id, findTranscript(id) ? readTranscript(id, h.project) : null)
     const t = closedCache.get(id)
     if (!t?.lastAnswer) continue // sesiones vacías (solo un /clear, un /resume…) no aportan nada
@@ -340,9 +341,14 @@ createServer((req, res) => {
   }
   // Línea de tiempo de una sesión cerrada: su transcript se lee entero solo cuando la abres.
   if (req.url.startsWith('/timeline?id=')) {
-    const s = snapshot.recent.find((x) => x.sessionId === req.url.slice(13))
-    res.writeHead(s ? 200 : 404, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(s ? tally(findTranscript(s.sessionId)).events : null))
+    const id = req.url.slice(13)
+    try {
+      if (!snapshot.recent.some((x) => x.sessionId === id)) throw new Error('no listada')
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tally(findTranscript(id)).events))
+    } catch {
+      closedCache.delete(id) // el transcript ya no está (limpieza de Claude Code): fuera de la lista en el próximo refresco
+      res.writeHead(404).end()
+    }
     return
   }
   if (req.url === '/events') {

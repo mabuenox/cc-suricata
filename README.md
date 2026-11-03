@@ -20,7 +20,7 @@ Starts the server at <http://localhost:4747> and opens your browser. Options:
 
 - `PORT=5000 npx cc-suricata` changes the port.
 - `--no-open` does not open the browser.
-- `--once` prints the sessions as JSON and exits.
+- `--once` prints `{ sessions, recent }` as JSON and exits.
 
 Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to an edited file opens it in VS Code (`code` must be on the PATH).
 
@@ -65,6 +65,7 @@ From those two sources it derives, per session:
 
 - The context bar estimates the window (200k, or 1M once it exceeds 200k): Claude Code does not expose it.
 - A session stopped at a permission dialog is not distinguished (the registry only says busy/idle).
+- In the timeline, a turn that ends with a question to you is drawn as working until you answer (only `end_turn` closes a turn).
 - The interface is in Spanish.
 
 ## Cross-platform TODO
