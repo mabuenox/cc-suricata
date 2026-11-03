@@ -62,6 +62,8 @@ function readTranscript(sessionId, cwd = '') {
     title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
     model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [], outputTokens: 0,
     background: [], // tareas lanzadas con run_in_background que aún no han notificado su fin
+    agentsAt: [], // timestamps de los Agent en primer plano sin resultado
+    pendingAt: null, // timestamp de la herramienta en curso
   }
   if (!path) return out
   const resolved = new Set()
@@ -117,12 +119,12 @@ function readTranscript(sessionId, cwd = '') {
         if (c.type === 'tool_use' && c.name === 'TaskStop') notified.add(c.input?.task_id ?? c.input?.shell_id)
         if (c.type === 'tool_use' && c.input?.run_in_background === true && !notified.has(c.id) && !notified.has(taskOf.get(c.id))) {
           const isAgent = c.name === 'Agent'
-          if (isAgent) out.agents++
           out.background.push({ tool: c.name, label: clip(String(isAgent ? c.input.description ?? '' : c.input.command ?? c.input.description ?? '')).split('\n')[0], at: r.timestamp })
         } else if (c.type === 'tool_use' && !resolved.has(c.id)) {
-          if (c.name === 'Agent') out.agents++
+          if (c.name === 'Agent') out.agentsAt.push(r.timestamp)
           if (!pendingTool) {
             pendingTool = c
+            out.pendingAt = r.timestamp
             if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(pregunta)'
             else out.currentTool = c.name
           }
@@ -200,6 +202,11 @@ function readSessions() {
     // Fuera las sesiones que no son tuyas: los `claude -p` de plugins (remember-summarizer…) corren desde la carpeta temporal.
     if (s.kind !== 'interactive' || !isAlive(s.pid) || !s.cwd || s.cwd.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
     const t = readTranscript(s.sessionId, s.cwd)
+    // Una tarea en background es hija del proceso de Claude Code: si se lanzó antes de que arrancara el proceso actual (sesión reanudada), murió con el anterior.
+    const alive = (at) => new Date(at).getTime() >= s.startedAt
+    t.background = t.background.filter((b) => alive(b.at))
+    t.agents = t.agentsAt.filter(alive).length + t.background.filter((b) => b.tool === 'Agent').length
+    if (t.pendingAt && !alive(t.pendingAt)) Object.assign(t, { currentTool: null, waitingQuestion: null })
     // shortcut: el registro solo dice busy/idle; la espera de permiso no se ve, solo la de AskUserQuestion. Revisar si el registro gana un estado "waiting".
     // El registro trae busy/idle y, a veces, valores transitorios; para la página todo lo que no es idle es "trabajando".
     const status = t.waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : t.background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
