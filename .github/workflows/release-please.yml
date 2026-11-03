@@ -1,31 +1,38 @@
 # En cada push a main, release-please mantiene una PR "chore(main): release X.Y.Z"
 # con package.json y CHANGELOG.md actualizados a partir de los commits (fix:, feat:, feat!:).
-# Al mergear esa PR crea la etiqueta y la release de GitHub y, en esta misma ejecución,
-# publica en npm con trusted publishing (OIDC): sin token y sin 2FA.
+# Al mergear esa PR crea la etiqueta y la release de GitHub y el job publish sube el
+# paquete a npm con trusted publishing (OIDC): sin token y sin 2FA.
+# Las acciones van fijadas a SHA; Dependabot propone las actualizaciones.
 name: release
 on:
   push:
     branches: [main]
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+permissions: {}
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
           release-type: node
-      - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.release_created }}
-      - uses: actions/setup-node@v4
-        if: ${{ steps.release.outputs.release_created }}
+  publish:
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # solo aquí: el token OIDC que npm acepta como trusted publisher
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest # trusted publishing necesita npm >= 11.5
-        if: ${{ steps.release.outputs.release_created }}
       - run: npm publish --provenance --access public
-        if: ${{ steps.release.outputs.release_created }}
