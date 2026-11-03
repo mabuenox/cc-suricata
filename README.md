@@ -85,3 +85,7 @@ node server.mjs
 ```
 
 No dependencies. `server.mjs` is the server (SSE at `/events`), `index.html` the page, `notify.ps1` the notification.
+
+### Releases
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`fix:` → patch, `feat:` → minor, `feat!:` → major). On every push to `main`, [release-please](https://github.com/googleapis/release-please) keeps a release PR up to date with the version bump and the changelog; merging it tags the release and publishes to npm from GitHub Actions with [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no token).

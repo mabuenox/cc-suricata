@@ -1,0 +1,31 @@
+# En cada push a main, release-please mantiene una PR "chore(main): release X.Y.Z"
+# con package.json y CHANGELOG.md actualizados a partir de los commits (fix:, feat:, feat!:).
+# Al mergear esa PR crea la etiqueta y la release de GitHub y, en esta misma ejecución,
+# publica en npm con trusted publishing (OIDC): sin token y sin 2FA.
+name: release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: node
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+      - uses: actions/setup-node@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing necesita npm >= 11.5
+        if: ${{ steps.release.outputs.release_created }}
+      - run: npm publish --provenance --access public
+        if: ${{ steps.release.outputs.release_created }}
