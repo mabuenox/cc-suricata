@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/mabuenox/cc-suricata/compare/v0.1.1...v0.2.0) (2026-11-04)
+
+
+### Features
+
+* notifications and VS Code on macOS and Linux ([1bddc3d](https://github.com/mabuenox/cc-suricata/commit/1bddc3d7334555de4544163468ea84cab5f03959))
+
+
+### Bug Fixes
+
+* show a session waiting on a permission prompt as "Asking you" ([c1d5de1](https://github.com/mabuenox/cc-suricata/commit/c1d5de1da9c2b121c7a2c5c19c66f926c3d5c8d2))
+
 ## 0.1.1 (2026-11-04)
 
 
