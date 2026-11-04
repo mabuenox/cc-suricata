@@ -27,7 +27,7 @@ Goal: robust software — easy to read, test, maintain, extend and delete.
 - Names that explain intent. If a comment explains **what** the code does, rename instead; comments
   are only for the **why**. 
 
-  ### Errors and edges
+### Errors and edges
 
 - Validate arguments on entry with guard clauses and descriptive exceptions.
 - Never return `null` to signal an error. Be strict about what you return (empty list,
@@ -68,12 +68,17 @@ cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code sessi
 - `index.html`, `style.css`, `app.js`: the page. `app.js` is a classic script with global state on purpose: fake sessions are injected from the browser console for screenshots. Do not turn it into a module.
 - `notify.ps1`: the Windows toast (Windows PowerShell 5.1 only).
 - `test/`: `node:test`, no framework. `test/fixtures/*.jsonl` are minimal transcripts in the real record shape, one per case that broke once. The transcript format is undocumented and changes without notice: when a parser bug appears, add the fixture that reproduces it before fixing.
+  - `tally` and the closed-session cache are keyed by path or id and live for the process: use one fixture file per case and unique ids per test.
+  - A fixture must end with a newline: `tally` keeps the last unterminated line as "still being written" and never parses it. `.gitattributes` keeps fixtures LF so string assertions hold on Windows.
+  - Do not put helper `.mjs` files under `test/`: `node --test` would run them as tests. Keep helpers inside the test files.
 
 ### Working here
 
 - `npm test` runs everything. `node server.mjs --once` prints the current snapshot (`{ sessions, recent }`) as JSON; `node server.mjs --no-open` serves it on <http://localhost:4747>.
+- `PORT=4748 node server.mjs --no-open` runs a second instance for testing a change without stopping the one in use.
 - Every runtime file must be listed in `files` in `package.json`: npm publishes only that list, and a missing file breaks `npx cc-suricata` while `node server.mjs` still works locally.
 - Anything the user sees (page, toasts, README screenshots) is in English. Screenshots in `docs/` are taken with injected fake data; never with real session names.
+  To take one: open the page, and in the browser console run `es.close()`, assign `sessions = [...]` (live rows plus `status: 'closed'` rows), set `selectedId` and `peekOpen = true`, call `render()`. Closed rows get their timeline from `closedEvents.set(id, events)`.
 - A `shortcut:` comment marks a known limit and when to lift it. Keep the form `shortcut: <the limit>, <when to upgrade>`.
 - Commits follow Conventional Commits: `fix:` and `feat:` drive the version and the changelog (release-please); `refactor:`, `test:`, `docs:`, `ci:`, `chore:` do not appear in it. Merging the release PR publishes to npm from GitHub Actions; the tests run before that publish.
 - Security boundaries to keep: the server only answers `Host: localhost`/`127.0.0.1`; `/open` only opens files the watcher listed and spawns `Code.exe` without a shell; a worktree `gitdir:` that resolves to a UNC path is rejected; CDN scripts carry SRI hashes; GitHub Actions are pinned to a SHA.
