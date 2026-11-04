@@ -55,6 +55,8 @@ test('isOwnSession: interactive, with a folder outside the temp dir', () => {
   assert.equal(isOwnSession({ ...s, kind: 'sdk' }, 'C:\\Temp'), false)
   assert.equal(isOwnSession({ ...s, cwd: 'c:\\temp\\claude\\plugin-run' }, 'C:\\Temp'), false) // plugins' claude -p runs
   assert.equal(isOwnSession({ ...s, cwd: undefined }, 'C:\\Temp'), false)
+  assert.equal(isOwnSession({ ...s, kind: 'bg' }, 'C:\\Temp'), true) // a session sent to the background
+  assert.equal(isOwnSession({ ...s, parkedJobId: 'e7506603' }, 'C:\\Temp'), false) // its parked front-end, status frozen
 })
 
 test('isAlive: this process yes, an unlikely pid no', () => {

@@ -31,6 +31,13 @@ test('background task whose completion notification already arrived', () => {
   assert.equal(derive(registry(), t).status, 'idle')
 })
 
+test('a registry wait (permission prompt, plan approval…) is "waiting" with its reason', () => {
+  const t = readTranscript(fx('bg-notified')) // no pending question in the transcript
+  const s = derive(registry({ status: 'waiting', waitingFor: 'approve Bash: npm test' }), t)
+  assert.deepEqual([s.status, s.waitingQuestion], ['waiting', 'approve Bash: npm test'])
+  assert.deepEqual(derive(registry({ status: 'waiting' }), t).waitingQuestion, '(waiting)')
+})
+
 test('background task stopped with TaskStop (by the task id from the result)', () => {
   const t = readTranscript(fx('bg-stopped'))
   assert.deepEqual(t.background, [])

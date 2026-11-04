@@ -42,7 +42,7 @@ Claude Code already keeps everything the watcher needs on disk. The server never
 
 From those two sources it derives, per session:
 
-- **State**: `waiting` when the last tool call is an `AskUserQuestion` without a result; otherwise the registry status, where anything that is not `idle` counts as working. A session that is `idle` but still has background work shows as `background`.
+- **State**: `waiting` when the registry says so (a permission prompt, a plan to approve, a dialog; `waitingFor` gives the reason) or when the last tool call is an `AskUserQuestion` without a result; otherwise the registry status, where anything that is not `idle` counts as working. A session sent to the background keeps its live `bg` probe; the parked front-end, whose status is frozen, is skipped. A session that is `idle` but still has background work shows as `background`.
 - **What it is doing now**: the last `tool_use` without a matching `tool_result`, or the first line of the last answer.
 - **Background tasks and agents**: a `tool_use` with `run_in_background: true` is running until a user record carries its `<tool-use-id>`/`<task-id>` notification, or a `TaskStop` names its task id. A background `Agent` counts as an agent; a foreground `Agent` without result too.
 - **Context usage**: `input + cache_read + cache_creation` tokens of the last assistant message, which is what the next request will carry.

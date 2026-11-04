@@ -179,11 +179,12 @@ export function derive(s, t, { total = 0, events = [] } = {}) {
   const background = t.background.filter((b) => alive(b.at))
   const agents = t.agentsAt.filter(alive).length + background.filter((b) => b.tool === 'Agent').length
   const pending = t.pendingAt && alive(t.pendingAt) ? t : { currentTool: null, waitingQuestion: null }
-  // shortcut: the registry only says busy/idle; a permission wait is invisible, only AskUserQuestion is. Revisit if the registry gains a "waiting" status.
-  // The registry carries busy/idle and, at times, transient values; for the page anything that is not idle is "working".
-  const status = pending.waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
+  // The registry says busy/idle/waiting (a permission prompt, a plan to approve, a dialog…; `waitingFor` says which) and, at times,
+  // transient values: for the page anything that is not idle is "working". AskUserQuestion is not a registry wait, it comes from the transcript.
+  const waitingQuestion = pending.waitingQuestion ?? (s.status === 'waiting' ? s.waitingFor ?? '(waiting)' : null)
+  const status = waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
   return {
-    ...s, ...t, background, agents, currentTool: pending.currentTool, waitingQuestion: pending.waitingQuestion,
+    ...s, ...t, background, agents, currentTool: pending.currentTool, waitingQuestion,
     outputTokens: total,
     events: events.filter(([at]) => at >= s.startedAt).slice(-400), // events before the current process are not part of this timeline
     status, rawStatus: s.status ?? null, statusSince: pending.waitingQuestion ? null : s.statusUpdatedAt,

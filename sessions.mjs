@@ -50,8 +50,10 @@ export function readHistory(path) {
 
 const underTemp = (cwd, tmp) => cwd.toLowerCase().startsWith(tmp.toLowerCase())
 
-// Your sessions: interactive ones with a folder. Plugins' `claude -p` runs (remember-summarizer…) start from the temp folder.
-export const isOwnSession = (s, tmp) => s.kind === 'interactive' && !!s.cwd && !underTemp(s.cwd, tmp)
+// Your sessions: interactive ones (or a session sent to the background, kind "bg") with a folder.
+// Plugins' `claude -p` runs (remember-summarizer…) start from the temp folder.
+// A probe with `parkedJobId` is the parked front-end of a backgrounded session: its status is frozen, the "bg" probe is the live one.
+export const isOwnSession = (s, tmp) => ['interactive', 'bg'].includes(s.kind) && typeof s.parkedJobId !== 'string' && !!s.cwd && !underTemp(s.cwd, tmp)
 
 export function isAlive(pid) {
   try {
