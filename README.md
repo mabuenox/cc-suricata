@@ -58,7 +58,7 @@ From those two sources it derives, per session:
 - **No hooks, no plugin, no configuration.** An earlier version was a Claude Code plugin ("mod"); it could only see its own session, and settings hooks would have to be installed in every machine. Watching the files Claude Code already writes needs nothing and sees every session, including Desktop and VS Code ones.
 - **Transcripts are read backwards, in 512 KB chunks.** A transcript can be tens of MB; everything the list needs is in its last few records. The reader walks from the end and stops as soon as it has prompt, answer, title and turn end (or after ~1500 records), so a refresh costs milliseconds. The only full pass, the token tally, is done once and then kept incremental.
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
-- **One dependency-free Node file.** `node:http`, `node:fs` and `node:child_process` are enough; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
+- **No dependencies.** Two Node files (`server.mjs` serves, `transcript.mjs` parses) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard). `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
 - **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
 - **Windows first.** The author's machine; see the TODO below for what to generalise.
@@ -90,7 +90,13 @@ cd cc-suricata
 node server.mjs
 ```
 
-No dependencies. `server.mjs` is the server (SSE at `/events`), `index.html` the page, `notify.ps1` the notification.
+No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
+
+```
+npm test
+```
+
+The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point: a pending question, background tasks (finished, stopped, still running), a resumed session, a subagent. They run in CI on every pull request and before each publish.
 
 ### Releases
 
