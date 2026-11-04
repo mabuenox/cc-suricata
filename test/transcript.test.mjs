@@ -37,7 +37,7 @@ test('background task stopped with TaskStop (by the task id from the result)', (
 })
 
 test('live background tasks: command and agent, and a resume discards them', () => {
-  const t = readTranscript(fx('bg-running'))
+  const t = readTranscript(fx('bg-running')) // ends with a TaskStop without id: must not count as stopping anything
   assert.deepEqual(t.background.map((b) => [b.tool, b.label]), [['Bash', 'pnpm test:e2e'], ['Agent', 'Review the diff']])
   const live = derive(registry(), t)
   assert.equal(live.status, 'background')
