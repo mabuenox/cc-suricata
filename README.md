@@ -68,7 +68,6 @@ From those two sources it derives, per session:
 - The context bar estimates the window (200k, or 1M once it exceeds 200k): Claude Code does not expose it.
 - A session stopped at a permission dialog is not distinguished (the registry only says busy/idle).
 - In the timeline, a turn that ends with a question to you is drawn as working until you answer (only `end_turn` closes a turn).
-- The interface is in Spanish.
 
 ## Cross-platform TODO
 

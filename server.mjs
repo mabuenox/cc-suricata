@@ -120,14 +120,14 @@ function notifyChanges(sessions) {
     const prev = lastStatus.get(s.sessionId)
     lastStatus.set(s.sessionId, s.status)
     if (prev === undefined || prev === s.status || s.status === 'busy' || s.status === 'background') continue
-    const text = String(s.waitingQuestion || s.lastAnswer?.text || 'Ha terminado').split('\n').find((l) => l.trim()) ?? 'Ha terminado'
+    const text = String(s.waitingQuestion || s.lastAnswer?.text || 'Finished').split('\n').find((l) => l.trim()) ?? 'Finished'
     try {
       spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(HERE, 'notify.ps1')], {
-        env: { ...process.env, CC_TITLE: `${s.name ?? s.cwd}: ${s.status === 'waiting' ? 'te pregunta' : 'ha terminado'}`, CC_TEXT: text.slice(0, 200) },
+        env: { ...process.env, CC_TITLE: `${s.name ?? s.cwd}: ${s.status === 'waiting' ? 'is asking you' : 'has finished'}`, CC_TEXT: text.slice(0, 200) },
         stdio: 'ignore',
       }).unref()
     } catch (err) {
-      console.error('notificación fallida:', err.message)
+      console.error('notification failed:', err.message)
     }
   }
 }
@@ -178,7 +178,7 @@ createServer((req, res) => {
         if (!s || !s.editedFiles.includes(file)) throw new Error('fichero no listado')
         const abs = isAbsolute(file) ? file : join(s.cwd, file)
         if (!statSync(abs).isFile()) throw new Error('no es un fichero')
-        if (!CODE_EXE) throw new Error('VS Code no está en el PATH')
+        if (!CODE_EXE) throw new Error('VS Code is not on the PATH')
         spawn(CODE_EXE, ['--goto', abs], { stdio: 'ignore', windowsHide: true }).unref() // sin shell: la ruta no se interpreta
         res.writeHead(204).end()
       } catch (err) {
@@ -217,7 +217,7 @@ createServer((req, res) => {
   res.end(readFileSync(join(HERE, file)))
 }).listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`
-  console.log(`Claude Code Suricata en ${url}`)
+  console.log(`Claude Code Suricata at ${url}`)
   if (process.argv.includes('--no-open')) return
   const open = { win32: ['cmd.exe', ['/c', 'start', '', url]], darwin: ['open', [url]] }[process.platform] ?? ['xdg-open', [url]]
   spawn(...open, { stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref()

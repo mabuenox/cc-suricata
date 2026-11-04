@@ -103,7 +103,7 @@ export function readTranscript(path, cwd = '') {
           if (!pendingTool) {
             pendingTool = c
             out.pendingAt = r.timestamp
-            if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(pregunta)'
+            if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(question)'
             else out.currentTool = c.name
           }
         }
