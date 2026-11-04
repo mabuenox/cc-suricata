@@ -71,7 +71,7 @@ From those two sources it derives, per session:
 
 ## Platforms
 
-Developed and used on Windows. Linux is checked end to end in a container (`scripts/linux-check.sh`: tests, a fake `~/.claude`, `notify-send`, `code`, `fs.watch`). macOS has the same code paths but the author has not run it there; a report of what you see is welcome.
+Developed and used on Windows. Linux is checked end to end in a container (`scripts/linux-check.sh`: tests, a fake `~/.claude`, `fs.watch`, and stubbed `notify-send` and `code` that record how they were called). macOS has the same code paths but the author has not run it there; a report of what you see is welcome.
 
 | | Windows | macOS | Linux |
 | --- | --- | --- | --- |

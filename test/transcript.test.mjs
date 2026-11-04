@@ -25,6 +25,10 @@ test('pending question, title, last typed prompt and files relative to the folde
   assert.equal(derive(registry({ status: 'busy' }), t).status, 'waiting')
 })
 
+test('edited files are relative to the folder with the separator of the OS of the transcript', () => {
+  assert.deepEqual(readTranscript(fx('posix-paths'), '/home/user/acme-shop').editedFiles, ['src/x.ts'])
+})
+
 test('background task whose completion notification already arrived', () => {
   const t = readTranscript(fx('bg-notified'))
   assert.deepEqual(t.background, [])

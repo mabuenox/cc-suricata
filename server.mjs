@@ -59,7 +59,7 @@ function notifyChanges(sessions) {
     if (prev === undefined || prev === s.status || s.status === 'busy' || s.status === 'background') continue
     const text = String(s.waitingQuestion || s.lastAnswer?.text || 'Finished').split('\n').find((l) => l.trim()) ?? 'Finished'
     const n = notifyCommand(process.platform, `${s.name ?? s.cwd}: ${s.status === 'waiting' ? 'is asking you' : 'has finished'}`, text.slice(0, 200), HERE)
-    if (!n) return // no notifier known for this platform
+    if (!n) continue // no notifier known for this platform
     try {
       spawn(n.cmd, n.args, { env: { ...process.env, ...n.env }, stdio: 'ignore', windowsHide: true })
         .on('error', (err) => console.error('notification failed:', err.message)) // e.g. notify-send not installed
