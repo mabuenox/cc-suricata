@@ -49,7 +49,7 @@ From those two sources it derives, per session:
 - **Model, permission mode, prompt and turn counters**: fields on the last typed prompt and the last assistant message.
 - **Generated tokens**: the sum of `output_tokens`, kept incrementally per transcript (only the bytes appended since the last read are parsed).
 - **Edited files**: the last eight `file-history-delta` paths, made relative to the session folder.
-- **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file), no `git` process.
+- **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file), no `git` process; a `gitdir:` that resolves to a UNC path is rejected.
 - **Timeline**: your prompts and `end_turn` messages, collected in the same incremental pass as the token tally. A prompt opens a *working* segment, an `end_turn` opens a *waiting* one; waits longer than an hour count as pauses. Events older than the current process are ignored, so a resumed session starts a fresh timeline.
 - **Recent sessions**: `~/.claude/history.jsonl` (one line per prompt: project, session id, timestamp) is the index; the transcript tail is read once per closed session for title, last answer and model, and its full timeline only when you open it.
 
@@ -58,7 +58,7 @@ From those two sources it derives, per session:
 - **No hooks, no plugin, no configuration.** An earlier version was a Claude Code plugin ("mod"); it could only see its own session, and settings hooks would have to be installed in every machine. Watching the files Claude Code already writes needs nothing and sees every session, including Desktop and VS Code ones.
 - **Transcripts are read backwards, in 512 KB chunks.** A transcript can be tens of MB; everything the list needs is in its last few records. The reader walks from the end and stops as soon as it has prompt, answer, title and turn end (or after ~1500 records), so a refresh costs milliseconds. The only full pass, the token tally, is done once and then kept incremental.
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
-- **No dependencies.** Two Node files (`server.mjs` serves, `transcript.mjs` parses) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
+- **No dependencies.** Three Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard). `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
 - **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
 - **Windows first.** The author's machine; see the TODO below for what to generalise.
@@ -89,13 +89,13 @@ cd cc-suricata
 node server.mjs
 ```
 
-No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
+No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, git branch and open check (tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
 
 ```
 npm test
 ```
 
-The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point: a pending question, background tasks (finished, stopped, still running), a resumed session, a subagent. They run in CI on every pull request and before each publish.
+The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point (a pending question, background tasks finished, stopped or still running, a resumed session, a subagent), and the session index, git branch reading and the `/open` check on fixtures and temp folders. They run in CI on every pull request and before each publish.
 
 ### Releases
 
