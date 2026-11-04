@@ -2,20 +2,19 @@
 // Claude Code Suricata: lee ~/.claude/sessions (estado vivo) y ~/.claude/projects
 // (transcripts) y los sirve en localhost con SSE.
 // Sin dependencias. `npx cc-suricata`, `--once` (imprime el JSON y sale), `--no-open` (no abre el navegador).
-import { readFileSync, readdirSync, watch, openSync, readSync, closeSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, watch, statSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
+import { readTranscript, tally, derive } from './transcript.mjs'
 
 const PORT = Number(process.env.PORT ?? 4747)
 const CLAUDE = join(homedir(), '.claude')
 const SESSIONS = join(CLAUDE, 'sessions')
 const PROJECTS = join(CLAUDE, 'projects')
 const HERE = dirname(fileURLToPath(import.meta.url))
-const TAIL_BYTES = 512 * 1024
-const MAX_TEXT = 1500
 
 const transcriptPaths = new Map() // sessionId -> ruta del jsonl
 
@@ -29,146 +28,6 @@ function findTranscript(sessionId) {
     }
   }
   return null
-}
-
-// Líneas del fichero de atrás adelante, leídas por trozos: un transcript grande solo se lee hasta donde haga falta.
-function* linesFromEnd(path) {
-  const size = statSync(path).size
-  const fd = openSync(path, 'r')
-  try {
-    let end = size
-    let carry = Buffer.alloc(0) // principio cortado de la última línea del trozo anterior
-    while (end > 0) {
-      const start = Math.max(0, end - TAIL_BYTES)
-      let buf = Buffer.alloc(end - start)
-      readSync(fd, buf, 0, buf.length, start)
-      buf = Buffer.concat([buf, carry])
-      const cut = start > 0 ? buf.indexOf(10) + 1 : 0 // la primera línea puede estar cortada (en bytes, por UTF-8)
-      carry = buf.subarray(0, cut)
-      yield* buf.subarray(cut).toString('utf8').split('\n').reverse()
-      end = start
-    }
-  } finally {
-    closeSync(fd)
-  }
-}
-
-const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) + '…' : s)
-
-// Recorre el transcript de atrás adelante y saca lo que la tarjeta muestra.
-function readTranscript(sessionId, cwd = '') {
-  const path = findTranscript(sessionId)
-  const out = {
-    title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
-    model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [],
-    background: [], // tareas lanzadas con run_in_background que aún no han notificado su fin
-    agentsAt: [], // timestamps de los Agent en primer plano sin resultado
-    pendingAt: null, // timestamp de la herramienta en curso
-  }
-  if (!path) return out
-  const resolved = new Set()
-  const notified = new Set() // tool_use ids y task ids de tareas en background cuya notificación de fin ya llegó, o paradas con TaskStop
-  const taskOf = new Map() // tool_use id -> task id, del resultado "Command running in background with ID: x"
-  let pendingTool = null
-  let scanned = 0
-  for (const line of linesFromEnd(path)) {
-    if (!line) continue
-    let r
-    try {
-      r = JSON.parse(line)
-    } catch {
-      continue
-    }
-    scanned++
-    if (r.type === 'ai-title' && !out.title) out.title = r.aiTitle
-    if (r.type === 'file-history-delta' && r.trackingPath && out.editedFiles.length < 8) {
-      const p = r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + '\\') ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
-      if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
-    }
-    if (r.isSidechain) continue
-    const content = r.message?.content
-    if (r.type === 'user') {
-      const text = typeof content === 'string' ? content : Array.isArray(content) ? content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') : ''
-      // Solo lo que tecleaste: fuera avisos de tareas, mensajes de otras sesiones e interrupciones (sin origin).
-      if (text && r.origin?.kind === 'human' && !out.lastPrompt) {
-        out.lastPrompt = { text: clip(text), at: r.timestamp }
-        out.permissionMode = r.permissionMode ?? null
-        out.prompts = (r.turnPosition?.promptIndex ?? -1) + 1
-        out.turns = (r.turnPosition?.turnIndex ?? -1) + 1
-      }
-      if (Array.isArray(content)) {
-        for (const c of content) {
-          if (c.type !== 'tool_result') continue
-          resolved.add(c.tool_use_id)
-          const body = typeof c.content === 'string' ? c.content : Array.isArray(c.content) ? c.content.map((x) => x.text ?? '').join('\n') : ''
-          const id = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
-          if (id) taskOf.set(c.tool_use_id, id)
-        }
-      }
-      for (const m of text.matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) notified.add(m[1])
-    }
-    if (r.type === 'assistant' && Array.isArray(content)) {
-      const u = r.message.usage
-      if (!out.model && u) {
-        out.model = r.message.model
-        out.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
-      }
-      if (r.message.stop_reason === 'end_turn' && !out.lastTurnEndedAt) out.lastTurnEndedAt = r.timestamp
-      for (const c of content) {
-        if (c.type === 'text' && c.text.trim() && !out.lastAnswer) out.lastAnswer = { text: clip(c.text.trim()), at: r.timestamp }
-        if (c.type === 'tool_use' && c.name === 'TaskStop') notified.add(c.input?.task_id ?? c.input?.shell_id)
-        if (c.type === 'tool_use' && c.input?.run_in_background === true && !notified.has(c.id) && !notified.has(taskOf.get(c.id))) {
-          const isAgent = c.name === 'Agent'
-          out.background.push({ tool: c.name, label: clip(String(isAgent ? c.input.description ?? '' : c.input.command ?? c.input.description ?? '')).split('\n')[0], at: r.timestamp })
-        } else if (c.type === 'tool_use' && !resolved.has(c.id)) {
-          if (c.name === 'Agent') out.agentsAt.push(r.timestamp)
-          if (!pendingTool) {
-            pendingTool = c
-            out.pendingAt = r.timestamp
-            if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(pregunta)'
-            else out.currentTool = c.name
-          }
-        }
-      }
-    }
-    // Lo esencial está en las últimas líneas; los ficheros editados pueden estar más atrás, pero no vale la pena leer todo el transcript.
-    if (out.lastPrompt && out.lastAnswer && out.title && out.lastTurnEndedAt && (out.editedFiles.length >= 8 || scanned > 1500)) break
-  }
-  return out
-}
-
-// Pasada por todo el transcript, incremental (solo lo que ha crecido desde la última vez): tokens generados
-// y eventos de la línea de tiempo, tus prompts ('p') y fines de turno ('e'), con su instante en ms.
-const tallies = new Map() // path -> { offset, total, events, rest }
-function tally(path) {
-  const t = tallies.get(path) ?? { offset: 0, total: 0, events: [], rest: '' }
-  const size = statSync(path).size
-  if (size < t.offset) Object.assign(t, { offset: 0, total: 0, events: [], rest: '' }) // fichero reescrito
-  if (size > t.offset) {
-    const buf = Buffer.alloc(size - t.offset)
-    const fd = openSync(path, 'r')
-    try {
-      readSync(fd, buf, 0, buf.length, t.offset)
-    } finally {
-      closeSync(fd)
-    }
-    const lines = (t.rest + buf.toString('utf8')).split('\n')
-    t.rest = lines.pop() // última línea, quizá a medias
-    for (const line of lines) {
-      if (!line.includes('"output_tokens"') && !line.includes('"kind":"human"') && !line.includes('"stop_reason":"end_turn"')) continue
-      try {
-        const r = JSON.parse(line)
-        t.total += r.message?.usage?.output_tokens ?? 0
-        if (r.isSidechain) continue
-        // shortcut: un turno que acaba en AskUserQuestion no es end_turn; esa espera se dibuja como trabajo. Revisar si el transcript marca esa parada.
-        if (r.type === 'user' && r.origin?.kind === 'human') t.events.push([Date.parse(r.timestamp), 'p'])
-        else if (r.type === 'assistant' && r.message?.stop_reason === 'end_turn') t.events.push([Date.parse(r.timestamp), 'e'])
-      } catch {}
-    }
-    t.offset = size
-    tallies.set(path, t)
-  }
-  return t
 }
 
 // Sesiones cerradas: history.jsonl (una línea por prompt con project, sessionId y timestamp) es el índice barato;
@@ -203,7 +62,7 @@ function recentSessions(live) {
   for (const [id, h] of [...readHistory()].sort((a, b) => b[1].lastAt - a[1].lastAt)) {
     if (liveIds.has(id)) { closedCache.delete(id); continue } // reanudada: lo cacheado quedará viejo cuando vuelva a cerrarse
     if (!h.project || h.project.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
-    if (!closedCache.has(id)) closedCache.set(id, findTranscript(id) ? readTranscript(id, h.project) : null)
+    if (!closedCache.has(id)) closedCache.set(id, findTranscript(id) ? readTranscript(findTranscript(id), h.project) : null)
     const t = closedCache.get(id)
     if (!t?.lastAnswer) continue // sesiones vacías (solo un /clear, un /resume…) no aportan nada
     out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.first.split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.n, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: null })
@@ -247,19 +106,8 @@ function readSessions() {
     }
     // Fuera las sesiones que no son tuyas: los `claude -p` de plugins (remember-summarizer…) corren desde la carpeta temporal.
     if (s.kind !== 'interactive' || !isAlive(s.pid) || !s.cwd || s.cwd.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
-    const t = readTranscript(s.sessionId, s.cwd)
     const path = findTranscript(s.sessionId)
-    const { total: outputTokens, events } = path ? tally(path) : { total: 0, events: [] }
-    // Una tarea en background es hija del proceso de Claude Code: si se lanzó antes de que arrancara el proceso actual (sesión reanudada), murió con el anterior.
-    const alive = (at) => new Date(at).getTime() >= s.startedAt
-    t.background = t.background.filter((b) => alive(b.at))
-    t.agents = t.agentsAt.filter(alive).length + t.background.filter((b) => b.tool === 'Agent').length
-    if (t.pendingAt && !alive(t.pendingAt)) Object.assign(t, { currentTool: null, waitingQuestion: null })
-    // shortcut: el registro solo dice busy/idle; la espera de permiso no se ve, solo la de AskUserQuestion. Revisar si el registro gana un estado "waiting".
-    // El registro trae busy/idle y, a veces, valores transitorios; para la página todo lo que no es idle es "trabajando".
-    const status = t.waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : t.background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
-    // Los eventos anteriores al proceso actual (sesión reanudada) no forman parte de esta línea de tiempo.
-    list.push({ ...s, ...t, outputTokens, events: events.filter(([at]) => at >= s.startedAt).slice(-400), status, rawStatus: s.status ?? null, statusSince: t.waitingQuestion ? null : s.statusUpdatedAt, branch: gitBranch(s.cwd) })
+    list.push({ ...derive(s, readTranscript(path, s.cwd), path ? tally(path) : undefined), branch: gitBranch(s.cwd) })
   }
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }

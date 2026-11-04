@@ -10,10 +10,12 @@
     "server.mjs",
     "index.html",
     "icon.svg",
-    "notify.ps1"
+    "notify.ps1",
+    "transcript.mjs"
   ],
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
