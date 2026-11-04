@@ -32,7 +32,8 @@ Goal: robust software — easy to read, test, maintain, extend and delete.
 - Validate arguments on entry with guard clauses and descriptive exceptions.
 - Never return `null` to signal an error. Be strict about what you return (empty list,
   Option/Result or exception). Absence is not an error: a `find*` may return `null` for "not there",
-  and a decorative value (the git branch) returns `''` when there is nothing to show; neither hides a failure.
+  and a decorative value (the git branch) returns `''` when there is nothing to show. Neither hides a failure:
+  an unexpected error (not `ENOENT`/`ENOTDIR`) is logged before the empty value is returned.
 - Handle nulls, empties, limits and errors. Fail clearly and without losing data.
 
 ### Tests

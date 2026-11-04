@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -24,10 +24,21 @@ test('gitBranch: branch, detached head, worktree with a relative gitdir', () => 
 })
 
 test('gitBranch: nothing to show is an empty string, never an exception (not a repo, UNC gitdir)', () => {
+  const error = mock.method(console, 'error', () => {})
   assert.equal(gitBranch(repo({})), '')
   assert.equal(gitBranch(repo({ '.git': 'gitdir: \\\\evil\\share\\repo\\.git\n' })), '') // would make a network request with credentials
   assert.equal(gitBranch(repo({ '.git': 'gitdir: //evil/share/repo/.git\n' })), '')
   assert.equal(gitBranch(join(repo({}), 'missing')), '')
+  assert.equal(error.mock.callCount(), 0) // absence is expected: nothing to report
+  error.mock.restore()
+})
+
+test('gitBranch: an unreadable HEAD is reported and still shows nothing', () => {
+  const error = mock.method(console, 'error', () => {})
+  assert.equal(gitBranch(repo({ '.git/HEAD/placeholder': '' })), '') // HEAD is a directory: EISDIR, not a missing file
+  assert.equal(error.mock.callCount(), 1)
+  assert.match(error.mock.calls[0].arguments[0], /git branch of /)
+  error.mock.restore()
 })
 
 test('readHistory: one entry per session with prompt count, first prompt and time span', () => {

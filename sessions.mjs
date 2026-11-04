@@ -14,7 +14,8 @@ export function gitBranch(cwd) {
     if (gitDir.startsWith('\\\\') || gitDir.startsWith('//')) return '' // a UNC path (\\host\…) would make a network request with credentials
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
     return head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)
-  } catch {
+  } catch (err) {
+    if (!['ENOENT', 'ENOTDIR'].includes(err.code)) console.error(`git branch of ${cwd}:`, err.message) // not a repo is expected; anything else is not
     return ''
   }
 }
