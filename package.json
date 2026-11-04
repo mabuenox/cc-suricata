@@ -14,7 +14,8 @@
     "transcript.mjs",
     "style.css",
     "app.js",
-    "sessions.mjs"
+    "sessions.mjs",
+    "platform.mjs"
   ],
   "scripts": {
     "start": "node server.mjs",

@@ -10,6 +10,7 @@ import { homedir, tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { readTranscript, emptyTranscript, tally, derive } from './transcript.mjs'
 import { gitBranch, readHistory, isOwnSession, isAlive, recentSessions, forgetClosed, openTarget } from './sessions.mjs'
+import { notifyCommand, findVsCode } from './platform.mjs'
 
 const PORT = Number(process.env.PORT ?? 4747)
 const CLAUDE = join(homedir(), '.claude')
@@ -49,20 +50,20 @@ function readSessions() {
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-// --- Windows notifications on state changes ---
+// --- desktop notifications on state changes ---
 const lastStatus = new Map()
 function notifyChanges(sessions) {
-  if (process.platform !== 'win32') return // shortcut: the native toast is Windows only; osascript on macOS and notify-send on Linux would do
   for (const s of sessions) {
     const prev = lastStatus.get(s.sessionId)
     lastStatus.set(s.sessionId, s.status)
     if (prev === undefined || prev === s.status || s.status === 'busy' || s.status === 'background') continue
     const text = String(s.waitingQuestion || s.lastAnswer?.text || 'Finished').split('\n').find((l) => l.trim()) ?? 'Finished'
+    const n = notifyCommand(process.platform, `${s.name ?? s.cwd}: ${s.status === 'waiting' ? 'is asking you' : 'has finished'}`, text.slice(0, 200), HERE)
+    if (!n) return // no notifier known for this platform
     try {
-      spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(HERE, 'notify.ps1')], {
-        env: { ...process.env, CC_TITLE: `${s.name ?? s.cwd}: ${s.status === 'waiting' ? 'is asking you' : 'has finished'}`, CC_TEXT: text.slice(0, 200) },
-        stdio: 'ignore',
-      }).unref()
+      spawn(n.cmd, n.args, { env: { ...process.env, ...n.env }, stdio: 'ignore', windowsHide: true })
+        .on('error', (err) => console.error('notification failed:', err.message)) // e.g. notify-send not installed
+        .unref()
     } catch (err) {
       console.error('notification failed:', err.message)
     }
@@ -80,8 +81,7 @@ if (process.argv.includes('--once')) {
 }
 
 // --- server ---
-// The real Code.exe (bin\code.cmd would need cmd.exe): looked up once on the PATH.
-const CODE_EXE = (process.env.PATH ?? '').split(';').map((d) => join(d, '..', 'Code.exe')).find((p) => existsSync(p)) ?? null
+const CODE_EXE = findVsCode(process.platform, process.env.PATH ?? '', existsSync) // looked up once
 const clients = new Set()
 let snapshot = snap()
 let timer = null

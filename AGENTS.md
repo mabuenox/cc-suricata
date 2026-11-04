@@ -58,11 +58,12 @@ All code, comments, identifiers, log messages, exception messages, and documenta
 
 ## This project
 
-cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code session on the machine. It never talks to Claude Code; it reads the files Claude Code writes under `~/.claude` and reacts to file system changes. No dependencies, Windows first.
+cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code session on the machine. It never talks to Claude Code; it reads the files Claude Code writes under `~/.claude` and reacts to file system changes. No dependencies. Developed on Windows; Linux is checked in Docker, macOS cannot be tried by the author.
 
 ### Layout
 
-- `server.mjs`: entry point. Watchers, SSE, the HTTP routes, Windows notifications. Not importable (it binds a port at import), so nothing with logic lives here.
+- `server.mjs`: entry point. Watchers, SSE, the HTTP routes, spawning the notification and VS Code. Not importable (it binds a port at import), so nothing with logic lives here.
+- `platform.mjs`: what differs per OS, as pure functions that return argv: `notifyCommand` (`notify.ps1` / `osascript` / `notify-send`) and `findVsCode` (`Code.exe` next to the PATH entry on Windows, the `code` launcher elsewhere).
 - `transcript.mjs`: reads one transcript (`~/.claude/projects/<project>/<sessionId>.jsonl`). `readTranscript` walks the tail backwards; `tally` walks forwards and incrementally; `derive` is pure and turns registry + transcript into the state the page shows.
 - `sessions.mjs`: the live registry (`~/.claude/sessions/<pid>.json`), the closed-session index (`~/.claude/history.jsonl`), `gitBranch`, `openTarget`. Paths are parameters so tests run on fixtures.
 - `index.html`, `style.css`, `app.js`: the page. `app.js` is a classic script with global state on purpose: fake sessions are injected from the browser console for screenshots. Do not turn it into a module.
@@ -76,10 +77,11 @@ cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code sessi
 
 - `npm test` runs everything. `node server.mjs --once` prints the current snapshot (`{ sessions, recent }`) as JSON; `node server.mjs --no-open` serves it on <http://localhost:4747>.
 - `PORT=4748 node server.mjs --no-open` runs a second instance for testing a change without stopping the one in use.
+- `docker run --rm -v "$PWD:/app:ro" node:22 bash /app/scripts/linux-check.sh` (from Git Bash: prefix `MSYS_NO_PATHCONV=1`) runs the Linux check: unit tests, then the server against a fake `~/.claude` with fake `notify-send` and `code` on the PATH. Run it after touching `platform.mjs`, path handling, or the watchers.
 - Every runtime file must be listed in `files` in `package.json`: npm publishes only that list, and a missing file breaks `npx cc-suricata` while `node server.mjs` still works locally.
 - Anything the user sees (page, toasts, README screenshots) is in English. Screenshots in `docs/` are taken with injected fake data; never with real session names.
   To take one: open the page, and in the browser console run `es.close()`, assign `sessions = [...]` (live rows plus `status: 'closed'` rows), set `selectedId` and `peekOpen = true`, call `render()`. Closed rows get their timeline from `closedEvents.set(id, events)`.
 - A `shortcut:` comment marks a known limit and when to lift it. Keep the form `shortcut: <the limit>, <when to upgrade>`.
 - Commits follow Conventional Commits: `fix:` and `feat:` drive the version and the changelog (release-please); `refactor:`, `test:`, `docs:`, `ci:`, `chore:` do not appear in it. Merging the release PR publishes to npm from GitHub Actions; the tests run before that publish.
 - Security boundaries to keep: the server only answers `Host: localhost`/`127.0.0.1`; `/open` only opens files the watcher listed and spawns `Code.exe` without a shell; a worktree `gitdir:` that resolves to a UNC path is rejected; CDN scripts carry SRI hashes; GitHub Actions are pinned to a SHA.
-- Known debt, by design: the context window is estimated (200k, or 1M above that); a turn that ends in a question to the user is drawn as working in the timeline; notifications and `Code.exe` lookup are Windows-only (see the README's cross-platform TODO).
+- Known debt, by design: the context window is estimated (200k, or 1M above that); a turn that ends in a question to the user is drawn as working in the timeline; the macOS notifier (`osascript`) is covered by unit tests only, never run by the author (see "Platforms" in the README).

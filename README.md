@@ -4,7 +4,7 @@
 
 # cc-suricata · Claude Code Watcher
 
-All your Claude Code sessions on one local page, at a glance: what each one is doing, which one is waiting for you, which one is asking you something, model, context usage, background tasks and agents. Sends a Windows notification when a session finishes its turn or asks you a question.
+All your Claude Code sessions on one local page, at a glance: what each one is doing, which one is waiting for you, which one is asking you something, model, context usage, background tasks and agents. Sends a desktop notification when a session finishes its turn or asks you a question.
 
 ![Claude Code Watcher: session list with a session asking a question, two waiting, two working, three recent closed sessions, and the panel of a closed session with its resume command and timeline](docs/screenshot.jpg)
 
@@ -61,7 +61,7 @@ From those two sources it derives, per session:
 - **No dependencies.** Three Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard). `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
 - **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
-- **Windows first.** The author's machine; see the TODO below for what to generalise.
+- **Developed on Windows.** macOS and Linux have their own notifier and VS Code lookup, tested only by unit tests; see "Platforms" below.
 
 ## Limitations
 
@@ -69,16 +69,17 @@ From those two sources it derives, per session:
 - A session stopped at a permission dialog is not distinguished (the registry only says busy/idle).
 - In the timeline, a turn that ends with a question to you is drawn as working until you answer (only `end_turn` closes a turn).
 
-## Cross-platform TODO
+## Platforms
 
-Built and tested on Windows only. On macOS and Linux the server starts and the page works, but these parts are Windows-specific (`server.mjs`, line numbers approximate):
+Developed and used on Windows. Linux is checked end to end in a container (`scripts/linux-check.sh`: tests, a fake `~/.claude`, `notify-send`, `code`, `fs.watch`). macOS has the same code paths but the author has not run it there; a report of what you see is welcome.
 
-- [ ] **Notifications** (`notifyChanges`, `notify.ps1`): skipped outside Windows. Add `osascript -e 'display notification …'` (or `terminal-notifier`) on macOS and `notify-send` on Linux, picking the command by `process.platform`.
-- [ ] **Edited file paths** (`readTranscript`): paths are made relative to the session folder with a hard-coded `\`. Use `path.sep`.
-- [ ] **Open in VS Code** (`CODE_EXE`): looks for `Code.exe` next to the PATH entry. On POSIX spawn `code` from the PATH directly (no shell).
-- [ ] **Sessions registry**: `~/.claude/sessions/*.json` and the `tmpdir()` filter for plugin-spawned sessions are assumed to have the same layout on every OS. Verify on macOS/Linux.
-- [ ] **`fs.watch` recursive** on `~/.claude/projects`: supported on macOS and on Linux with Node ≥ 20; verify it fires on new session files.
-- [ ] Opening the browser already handles `win32`, `darwin` (`open`) and the rest (`xdg-open`).
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Notification | `notify.ps1` (WinRT toast + sound) | `osascript` (`display notification`) | `notify-send` (libnotify) |
+| Open in VS Code | `Code.exe` next to the PATH entry | `code` on the PATH | `code` on the PATH |
+| Open the browser | `start` | `open` | `xdg-open` |
+
+The command for each is chosen in `platform.mjs` by `process.platform`; the server spawns it without a shell, so titles and texts are never interpreted. Not yet verified on macOS: that `fs.watch` with `recursive` fires for new transcripts, and that `osascript` shows the notification (it may ask for a permission the first time).
 
 ## Development
 

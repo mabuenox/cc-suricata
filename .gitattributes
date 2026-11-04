@@ -1,1 +1,2 @@
 test/fixtures/* -text
+scripts/*.sh text eol=lf

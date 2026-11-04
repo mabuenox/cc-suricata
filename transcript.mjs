@@ -81,7 +81,8 @@ export function readTranscript(path, cwd = '') {
 
 function noteEditedFile(r, out, cwd) {
   if (r.type !== 'file-history-delta' || !r.trackingPath || out.editedFiles.length >= MAX_FILES) return
-  const p = r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + '\\') ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
+  const inFolder = ['\\', '/'].some((sep) => r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + sep)) // the separator the OS of the transcript uses
+  const p = inFolder ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
   if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
 }
 
