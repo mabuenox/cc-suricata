@@ -1,8 +1,11 @@
 name: test
+# On push only: a pull_request trigger also fires for the release PR the bot opens with the
+# GITHUB_TOKEN, and GitHub kills that run before any job starts, leaving a red X on every release.
+# Pushes by the bot do not trigger workflows at all, so the release branch stays silent; its tests
+# run in the publish job before uploading to npm. Forks are not covered (their pushes are elsewhere).
 on:
-  pull_request:
   push:
-    branches-ignore: [main] # on main the publish job already runs it before uploading to npm
+    branches-ignore: [main]
 permissions:
   contents: read
 jobs:
