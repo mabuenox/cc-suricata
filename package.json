@@ -13,7 +13,8 @@
     "notify.ps1",
     "transcript.mjs",
     "style.css",
-    "app.js"
+    "app.js",
+    "sessions.mjs"
   ],
   "scripts": {
     "start": "node server.mjs",

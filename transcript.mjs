@@ -5,10 +5,12 @@
 //  - tally walks the whole file forwards, but only once: it keeps the offset and on each refresh
 //    parses only what has grown (generated tokens and timeline events).
 // derive() combines the live sessions registry with what was read; it is pure so it can be tested.
-import { readFileSync, openSync, readSync, closeSync, statSync } from 'node:fs'
+import { openSync, readSync, closeSync, statSync } from 'node:fs'
 
 const TAIL_BYTES = 512 * 1024
 const MAX_TEXT = 1500
+const MAX_FILES = 8
+const MAX_RECORDS = 1500
 
 // Lines of the file from the end, read in chunks: a large transcript is only read as far as needed.
 export function* linesFromEnd(path) {
@@ -32,87 +34,108 @@ export function* linesFromEnd(path) {
   }
 }
 
-const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) + '…' : s)
-
-// Walks the transcript backwards and extracts what the row and the panel show.
-export function readTranscript(path, cwd = '') {
-  const out = {
-    title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
-    model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [],
-    background: [], // tasks launched with run_in_background that have not reported their end yet
-    agentsAt: [], // timestamps of foreground Agents without a result
-    pendingAt: null, // timestamp of the tool in progress
-  }
-  if (!path) return out
-  const resolved = new Set()
-  const notified = new Set() // tool_use ids and task ids of background tasks whose completion notification arrived, or stopped with TaskStop
-  const taskOf = new Map() // tool_use id -> task id, from the result "Command running in background with ID: x"
-  let pendingTool = null
-  let scanned = 0
+function* recordsFromEnd(path) {
   for (const line of linesFromEnd(path)) {
     if (!line) continue
-    let r
     try {
-      r = JSON.parse(line)
-    } catch {
-      continue
-    }
-    scanned++
-    if (r.type === 'ai-title' && !out.title) out.title = r.aiTitle
-    if (r.type === 'file-history-delta' && r.trackingPath && out.editedFiles.length < 8) {
-      const p = r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + '\\') ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
-      if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
-    }
+      yield JSON.parse(line)
+    } catch {} // a line still being written
+  }
+}
+
+const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) + '…' : s)
+const textOf = (content) => (typeof content === 'string' ? content : Array.isArray(content) ? content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') : '')
+
+export const emptyTranscript = () => ({
+  title: null, lastPrompt: null, lastAnswer: null, currentTool: null, waitingQuestion: null, lastTurnEndedAt: null,
+  model: null, contextTokens: null, permissionMode: null, prompts: null, turns: null, agents: 0, editedFiles: [],
+  background: [], // tasks launched with run_in_background that have not reported their end yet
+  agentsAt: [], // timestamps of foreground Agents without a result
+  pendingAt: null, // timestamp of the tool in progress
+})
+
+// Walks the transcript backwards and extracts what the row and the panel show. Because it walks backwards,
+// a tool's result and a background task's completion are seen before the tool call itself: `seen` carries them.
+export function readTranscript(path, cwd = '') {
+  if (!path) throw new TypeError('readTranscript: path is required')
+  const out = emptyTranscript()
+  const seen = {
+    resolved: new Set(), // tool_use ids with a result
+    notified: new Set(), // tool_use ids and task ids of background tasks whose completion arrived, or stopped with TaskStop
+    taskOf: new Map(), // tool_use id -> task id, from the result "Command running in background with ID: x"
+    pending: false, // the tool in progress is the last tool_use without result, i.e. the first one found
+    records: 0,
+  }
+  for (const r of recordsFromEnd(path)) {
+    seen.records++
+    noteEditedFile(r, out, cwd)
+    if (r.type === 'ai-title') out.title ??= r.aiTitle
     if (r.isSidechain) continue
-    const content = r.message?.content
-    if (r.type === 'user') {
-      const text = typeof content === 'string' ? content : Array.isArray(content) ? content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') : ''
-      // Only what you typed: no task notifications, messages from other sessions or interruptions (no origin).
-      if (text && r.origin?.kind === 'human' && !out.lastPrompt) {
-        out.lastPrompt = { text: clip(text), at: r.timestamp }
-        out.permissionMode = r.permissionMode ?? null
-        out.prompts = (r.turnPosition?.promptIndex ?? -1) + 1
-        out.turns = (r.turnPosition?.turnIndex ?? -1) + 1
-      }
-      if (Array.isArray(content)) {
-        for (const c of content) {
-          if (c.type !== 'tool_result') continue
-          resolved.add(c.tool_use_id)
-          const body = typeof c.content === 'string' ? c.content : Array.isArray(c.content) ? c.content.map((x) => x.text ?? '').join('\n') : ''
-          const id = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
-          if (id) taskOf.set(c.tool_use_id, id)
-        }
-      }
-      for (const m of text.matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) notified.add(m[1])
-    }
-    if (r.type === 'assistant' && Array.isArray(content)) {
-      const u = r.message.usage
-      if (!out.model && u) {
-        out.model = r.message.model
-        out.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
-      }
-      if (r.message.stop_reason === 'end_turn' && !out.lastTurnEndedAt) out.lastTurnEndedAt = r.timestamp
-      for (const c of content) {
-        if (c.type === 'text' && c.text.trim() && !out.lastAnswer) out.lastAnswer = { text: clip(c.text.trim()), at: r.timestamp }
-        if (c.type === 'tool_use' && c.name === 'TaskStop') notified.add(c.input?.task_id ?? c.input?.shell_id)
-        if (c.type === 'tool_use' && c.input?.run_in_background === true && !notified.has(c.id) && !notified.has(taskOf.get(c.id))) {
-          const isAgent = c.name === 'Agent'
-          out.background.push({ tool: c.name, label: clip(String(isAgent ? c.input.description ?? '' : c.input.command ?? c.input.description ?? '')).split('\n')[0], at: r.timestamp })
-        } else if (c.type === 'tool_use' && !resolved.has(c.id)) {
-          if (c.name === 'Agent') out.agentsAt.push(r.timestamp)
-          if (!pendingTool) {
-            pendingTool = c
-            out.pendingAt = r.timestamp
-            if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(question)'
-            else out.currentTool = c.name
-          }
-        }
-      }
-    }
+    if (r.type === 'user') noteUserRecord(r, out, seen)
+    if (r.type === 'assistant' && Array.isArray(r.message?.content)) noteAssistantRecord(r, out, seen)
     // The essentials are in the last lines; edited files may be further back, but reading the whole transcript is not worth it.
-    if (out.lastPrompt && out.lastAnswer && out.title && out.lastTurnEndedAt && (out.editedFiles.length >= 8 || scanned > 1500)) break
+    if (out.lastPrompt && out.lastAnswer && out.title && out.lastTurnEndedAt && (out.editedFiles.length >= MAX_FILES || seen.records > MAX_RECORDS)) break
   }
   return out
+}
+
+function noteEditedFile(r, out, cwd) {
+  if (r.type !== 'file-history-delta' || !r.trackingPath || out.editedFiles.length >= MAX_FILES) return
+  const p = r.trackingPath.toLowerCase().startsWith(cwd.toLowerCase() + '\\') ? r.trackingPath.slice(cwd.length + 1) : r.trackingPath
+  if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
+}
+
+function noteUserRecord(r, out, seen) {
+  const content = r.message?.content
+  const text = textOf(content)
+  // Only what you typed: no task notifications, messages from other sessions or interruptions (no origin).
+  if (text && r.origin?.kind === 'human' && !out.lastPrompt) {
+    out.lastPrompt = { text: clip(text), at: r.timestamp }
+    out.permissionMode = r.permissionMode ?? null
+    out.prompts = (r.turnPosition?.promptIndex ?? -1) + 1
+    out.turns = (r.turnPosition?.turnIndex ?? -1) + 1
+  }
+  for (const c of Array.isArray(content) ? content : []) {
+    if (c.type !== 'tool_result') continue
+    seen.resolved.add(c.tool_use_id)
+    const body = typeof c.content === 'string' ? c.content : Array.isArray(c.content) ? c.content.map((x) => x.text ?? '').join('\n') : ''
+    const taskId = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
+    if (taskId) seen.taskOf.set(c.tool_use_id, taskId)
+  }
+  for (const m of text.matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) seen.notified.add(m[1])
+}
+
+function noteAssistantRecord(r, out, seen) {
+  const { usage, model, stop_reason, content } = r.message
+  if (!out.model && usage) {
+    out.model = model
+    out.contextTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
+  }
+  if (stop_reason === 'end_turn') out.lastTurnEndedAt ??= r.timestamp
+  for (const c of content) {
+    if (c.type === 'text' && c.text.trim() && !out.lastAnswer) out.lastAnswer = { text: clip(c.text.trim()), at: r.timestamp }
+    if (c.type === 'tool_use') noteToolUse(c, r.timestamp, out, seen)
+  }
+}
+
+function noteToolUse(c, at, out, seen) {
+  if (c.name === 'TaskStop') {
+    const id = c.input?.task_id ?? c.input?.shell_id
+    if (id) seen.notified.add(id) // adding undefined would match every task without a known id
+  }
+  if (c.input?.run_in_background === true) {
+    if (seen.notified.has(c.id) || seen.notified.has(seen.taskOf.get(c.id))) return
+    const label = c.name === 'Agent' ? c.input.description ?? '' : c.input.command ?? c.input.description ?? ''
+    out.background.push({ tool: c.name, label: clip(String(label)).split('\n')[0], at })
+    return
+  }
+  if (seen.resolved.has(c.id)) return
+  if (c.name === 'Agent') out.agentsAt.push(at)
+  if (seen.pending) return
+  seen.pending = true
+  out.pendingAt = at
+  if (c.name === 'AskUserQuestion') out.waitingQuestion = c.input?.questions?.[0]?.question ?? '(question)'
+  else out.currentTool = c.name
 }
 
 // Pass over the whole transcript, incremental (only what has grown since last time): generated tokens

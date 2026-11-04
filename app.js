@@ -77,7 +77,7 @@ let peekOpen = false
 const row = (s) => `
   <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
     ${ICON[s.status]}
-    <span class="who"><span class="name">${esc(s.name ?? s.cwd)}${src(s)}</span><span class="branch">${esc(s.branch ?? s.cwd)}</span></span>
+    <span class="who"><span class="name">${esc(s.name ?? s.cwd)}${src(s)}</span><span class="branch">${esc(s.branch || s.cwd)}</span></span>
     <span class="doing">${doing(s)}</span>
     <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
     ${gauge(s.contextTokens)}
