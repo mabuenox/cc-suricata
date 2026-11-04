@@ -11,7 +11,9 @@
     "index.html",
     "icon.svg",
     "notify.ps1",
-    "transcript.mjs"
+    "transcript.mjs",
+    "style.css",
+    "app.js"
   ],
   "scripts": {
     "start": "node server.mjs",
