@@ -11,7 +11,7 @@ html, body { height: 100%; }
 body { margin: 0; display: grid; grid-template-rows: auto 1fr; background: var(--bg); color: var(--text); font: 400 14px/1.5 Inter, system-ui, sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 a { color: #8b93f0; }
 
-/* Cabecera */
+/* Header */
 header { display: flex; align-items: center; gap: 14px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--side); }
 header .logo { width: 32px; height: 32px; display: block; }
 header .title { font: 12px/1 Silkscreen, monospace; letter-spacing: .02em; white-space: nowrap; }
@@ -24,7 +24,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4cb782; }
 .live.off { color: var(--need); } .live.off::before { background: var(--need); }
 
-/* Lista + panel */
+/* List + panel */
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 0; overflow: hidden; transition: grid-template-columns .15s ease; }
 .layout.peek-open { grid-template-columns: minmax(0, 1fr) 460px; }
 @media (prefers-reduced-motion: reduce) { .layout { transition: none; } }
@@ -63,7 +63,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .empty { display: grid; place-items: center; height: 60%; color: var(--muted); text-align: center; }
 .empty b { display: block; color: var(--text); font-weight: 500; margin-bottom: 4px; }
 
-/* Panel de previsualización: solo los textos largos */
+/* Peek panel: only the long texts */
 .peek { border-left: 1px solid var(--border); background: var(--side); overflow: auto; min-width: 0; }
 .peek .head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--side); }
 .peek .head h1 { font-size: 15px; font-weight: 600; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -93,7 +93,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .cmd:last-child { margin-bottom: 0; }
 .src { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; color: var(--muted); vertical-align: 1px; }
 .path { color: var(--muted); font: 12.5px var(--mono); }
-/* Línea de tiempo: trabajando (amarillo) / esperándote (verde); una pausa larga se dibuja acortada y punteada */
+/* Timeline: working (yellow) / waiting for you (green); a long pause is drawn shortened and dotted */
 .tl { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border); }
 .tl .work { background: var(--work); } .tl .wait { background: var(--done); }
 .tl .pause { background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); }

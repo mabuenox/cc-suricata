@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Claude Code Suricata: lee ~/.claude/sessions (estado vivo) y ~/.claude/projects
-// (transcripts) y los sirve en localhost con SSE.
-// Sin dependencias. `npx cc-suricata`, `--once` (imprime el JSON y sale), `--no-open` (no abre el navegador).
+// Claude Code Suricata: reads ~/.claude/sessions (live state) and ~/.claude/projects
+// (transcripts) and serves them on localhost over SSE.
+// No dependencies. `npx cc-suricata`, `--once` (prints the JSON and exits), `--no-open` (does not open the browser).
 import { readFileSync, readdirSync, watch, statSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, dirname, isAbsolute, resolve } from 'node:path'
@@ -16,7 +16,7 @@ const SESSIONS = join(CLAUDE, 'sessions')
 const PROJECTS = join(CLAUDE, 'projects')
 const HERE = dirname(fileURLToPath(import.meta.url))
 
-const transcriptPaths = new Map() // sessionId -> ruta del jsonl
+const transcriptPaths = new Map() // sessionId -> path of the jsonl
 
 function findTranscript(sessionId) {
   if (transcriptPaths.has(sessionId)) return transcriptPaths.get(sessionId)
@@ -30,8 +30,8 @@ function findTranscript(sessionId) {
   return null
 }
 
-// Sesiones cerradas: history.jsonl (una línea por prompt con project, sessionId y timestamp) es el índice barato;
-// del transcript, que ya no cambia, se lee una sola vez la cola para título, última respuesta y modelo.
+// Closed sessions: history.jsonl (one line per prompt with project, sessionId and timestamp) is the cheap index;
+// the transcript, which no longer changes, has its tail read once for title, last answer and model.
 const history = { size: 0, bySession: new Map() } // sessionId -> { project, first, firstAt, lastAt, n }
 function readHistory() {
   try {
@@ -55,29 +55,29 @@ function readHistory() {
   } catch {}
   return history.bySession
 }
-const closedCache = new Map() // sessionId -> readTranscript(), o null si ya no hay transcript
+const closedCache = new Map() // sessionId -> readTranscript(), or null when the transcript is gone
 function recentSessions(live) {
   const liveIds = new Set(live.map((s) => s.sessionId))
   const out = []
   for (const [id, h] of [...readHistory()].sort((a, b) => b[1].lastAt - a[1].lastAt)) {
-    if (liveIds.has(id)) { closedCache.delete(id); continue } // reanudada: lo cacheado quedará viejo cuando vuelva a cerrarse
+    if (liveIds.has(id)) { closedCache.delete(id); continue } // resumed: the cached data would be stale when it closes again
     if (!h.project || h.project.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
     if (!closedCache.has(id)) closedCache.set(id, findTranscript(id) ? readTranscript(findTranscript(id), h.project) : null)
     const t = closedCache.get(id)
-    if (!t?.lastAnswer) continue // sesiones vacías (solo un /clear, un /resume…) no aportan nada
+    if (!t?.lastAnswer) continue // empty sessions (just a /clear, a /resume…) add nothing
     out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.first.split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.n, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: null })
     if (out.length === 20) break
   }
   return out
 }
 
-// Rama git de la carpeta, sin lanzar git: lee .git/HEAD (o el gitdir de un worktree).
+// Git branch of the folder without running git: reads .git/HEAD (or a worktree's gitdir).
 function gitBranch(cwd) {
   try {
     let gitDir = join(cwd, '.git')
     if (!statSync(gitDir).isDirectory()) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
-    gitDir = resolve(cwd, gitDir) // relativa al worktree; resuelta antes de mirar la raíz
-    if (!/^[A-Za-z]:\\/.test(gitDir)) return null // una ruta UNC (\\host\…) haría una petición de red con credenciales
+    gitDir = resolve(cwd, gitDir) // relative to the worktree; resolved before looking at the root
+    if (!/^[A-Za-z]:\\/.test(gitDir)) return null // a UNC path (\\host\…) would make a network request with credentials
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
     return head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)
   } catch {
@@ -104,7 +104,7 @@ function readSessions() {
     } catch {
       continue
     }
-    // Fuera las sesiones que no son tuyas: los `claude -p` de plugins (remember-summarizer…) corren desde la carpeta temporal.
+    // Skip sessions that are not yours: plugins' `claude -p` runs (remember-summarizer…) start from the temp folder.
     if (s.kind !== 'interactive' || !isAlive(s.pid) || !s.cwd || s.cwd.toLowerCase().startsWith(tmpdir().toLowerCase())) continue
     const path = findTranscript(s.sessionId)
     list.push({ ...derive(s, readTranscript(path, s.cwd), path ? tally(path) : undefined), branch: gitBranch(s.cwd) })
@@ -112,10 +112,10 @@ function readSessions() {
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-// --- notificaciones de Windows al cambiar de estado ---
+// --- Windows notifications on state changes ---
 const lastStatus = new Map()
 function notifyChanges(sessions) {
-  if (process.platform !== 'win32') return // shortcut: el aviso nativo es solo Windows; en macOS valdría osascript, en Linux notify-send
+  if (process.platform !== 'win32') return // shortcut: the native toast is Windows only; osascript on macOS and notify-send on Linux would do
   for (const s of sessions) {
     const prev = lastStatus.get(s.sessionId)
     lastStatus.set(s.sessionId, s.status)
@@ -142,8 +142,8 @@ if (process.argv.includes('--once')) {
   process.exit(0)
 }
 
-// --- servidor ---
-// Code.exe real (bin\code.cmd necesitaría cmd.exe): se busca una vez en el PATH.
+// --- server ---
+// The real Code.exe (bin\code.cmd would need cmd.exe): looked up once on the PATH.
 const CODE_EXE = (process.env.PATH ?? '').split(';').map((d) => join(d, '..', 'Code.exe')).find((p) => existsSync(p)) ?? null
 const clients = new Set()
 let snapshot = snap()
@@ -159,15 +159,15 @@ function refresh() {
 }
 watch(SESSIONS, refresh)
 watch(PROJECTS, { recursive: true }, (_, file) => file?.endsWith('.jsonl') && refresh())
-setInterval(refresh, 15_000) // por si un watcher se pierde algo y para el "hace X min"
+setInterval(refresh, 15_000) // in case a watcher misses something, and to keep the "X min ago" column current
 
 createServer((req, res) => {
-  // Solo desde el propio equipo: un sitio remoto no puede leer esto vía DNS rebinding.
+  // Only from this machine: a remote site cannot read this through DNS rebinding.
   if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host)) {
     res.writeHead(403).end()
     return
   }
-  // Abrir en VS Code un fichero editado: solo los que el watcher ha listado para esa sesión.
+  // Open an edited file in VS Code: only the ones the watcher listed for that session.
   if (req.method === 'POST' && req.url === '/open') {
     let body = ''
     req.on('data', (c) => (body += c))
@@ -175,11 +175,11 @@ createServer((req, res) => {
       try {
         const { sessionId, file } = JSON.parse(body)
         const s = [...snapshot.sessions, ...snapshot.recent].find((x) => x.sessionId === sessionId)
-        if (!s || !s.editedFiles.includes(file)) throw new Error('fichero no listado')
+        if (!s || !s.editedFiles.includes(file)) throw new Error('file not listed')
         const abs = isAbsolute(file) ? file : join(s.cwd, file)
-        if (!statSync(abs).isFile()) throw new Error('no es un fichero')
+        if (!statSync(abs).isFile()) throw new Error('not a file')
         if (!CODE_EXE) throw new Error('VS Code is not on the PATH')
-        spawn(CODE_EXE, ['--goto', abs], { stdio: 'ignore', windowsHide: true }).unref() // sin shell: la ruta no se interpreta
+        spawn(CODE_EXE, ['--goto', abs], { stdio: 'ignore', windowsHide: true }).unref() // no shell: the path is not interpreted
         res.writeHead(204).end()
       } catch (err) {
         res.writeHead(400).end(err.message)
@@ -187,14 +187,14 @@ createServer((req, res) => {
     })
     return
   }
-  // Línea de tiempo de una sesión cerrada: su transcript se lee entero solo cuando la abres.
+  // Timeline of a closed session: its transcript is read in full only when you open it.
   if (req.url.startsWith('/timeline?id=')) {
     const id = req.url.slice(13)
     try {
-      if (!snapshot.recent.some((x) => x.sessionId === id)) throw new Error('no listada')
+      if (!snapshot.recent.some((x) => x.sessionId === id)) throw new Error('not listed')
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tally(findTranscript(id)).events))
     } catch {
-      closedCache.delete(id) // el transcript ya no está (limpieza de Claude Code): fuera de la lista en el próximo refresco
+      closedCache.delete(id) // the transcript is gone (Claude Code cleanup): out of the list on the next refresh
       res.writeHead(404).end()
     }
     return
@@ -206,7 +206,7 @@ createServer((req, res) => {
     req.on('close', () => clients.delete(res))
     return
   }
-  // Ficheros propios (index.html, icon.svg…): solo nombres planos de esta carpeta.
+  // Own files (index.html, icon.svg…): plain names from this folder only.
   const file = req.url === '/' ? 'index.html' : req.url.slice(1).split('?')[0]
   const type = { html: 'text/html; charset=utf-8', svg: 'image/svg+xml', css: 'text/css', js: 'text/javascript' }[file.split('.').pop()]
   if (!type || !/^[\w.-]+$/.test(file) || !existsSync(join(HERE, file))) {

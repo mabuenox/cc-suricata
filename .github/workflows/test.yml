@@ -2,7 +2,7 @@ name: test
 on:
   pull_request:
   push:
-    branches-ignore: [main] # en main ya lo ejecuta el job publish antes de subir a npm
+    branches-ignore: [main] # on main the publish job already runs it before uploading to npm
 permissions:
   contents: read
 jobs:

@@ -1,5 +1,5 @@
-# Notificación de Windows (silenciosa) + sonido. Título y texto llegan por CC_TITLE / CC_TEXT.
-# Requiere Windows PowerShell 5.1 (pwsh 7 no carga los tipos WinRT).
+# Windows notification (silent toast) + sound. Title and text come in CC_TITLE / CC_TEXT.
+# Needs Windows PowerShell 5.1 (pwsh 7 does not load the WinRT types).
 $ErrorActionPreference = 'Stop'
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 $x = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
