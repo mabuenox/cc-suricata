@@ -6,7 +6,7 @@
 
 All your Claude Code sessions on one local page, at a glance: what each one is doing, which one is waiting for you, which one is asking you something, model, context usage, background tasks and agents. Sends a Windows notification when a session finishes its turn or asks you a question.
 
-![Claude Code Watcher: session list with a session asking a question, two waiting, two working, and the detail panel open](docs/screenshot.jpg)
+![Claude Code Watcher: session list with a session asking a question, two waiting, two working, three recent closed sessions, and the panel of a closed session with its resume command and timeline](docs/screenshot.jpg)
 
 It does not touch Claude Code's configuration: it reads `~/.claude/sessions/*.json` (the registry of live sessions) and `~/.claude/projects/**/*.jsonl` (transcripts) and reacts to file system changes.
 
@@ -30,6 +30,8 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 - Per session: name, git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
 - Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
 - *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
+
+<p align="center"><img src="docs/timeline.png" width="460" alt="Panel of a session: timeline strip with working and waiting segments, 5 turns, 1.2 h working, 1.1 h waiting, 1 pause; last answer, last prompt and edited files"></p>
 
 ## How it works
 
