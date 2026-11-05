@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-11-05T15:49:00.297Z",
+        "reason": "model: Inter is the page's established face since 0.1, chosen with the Linear-like look in docs/ screenshots; not introduced by this change"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "style.css"
+        ],
+        "createdAt": "2026-11-05T15:49:00.626Z",
+        "reason": "model: the left rule on .prompt is the page's existing quote style; .match reuses it so a matched prompt reads as a prompt"
+      }
+    ]
+  }
+}
