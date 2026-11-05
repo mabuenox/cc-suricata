@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/mabuenox/cc-suricata/compare/v0.2.0...v0.3.0) (2026-11-05)
+
+
+### Features
+
+* search your prompts across every session ([bfe2e3b](https://github.com/mabuenox/cc-suricata/commit/bfe2e3be3d579dd52235773fc342fedeb07ee289))
+
 ## [0.2.0](https://github.com/mabuenox/cc-suricata/compare/v0.1.1...v0.2.0) (2026-11-04)
 
 
