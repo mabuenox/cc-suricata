@@ -18,6 +18,10 @@ header .title { font: 12px/1 Silkscreen, monospace; letter-spacing: .02em; white
 header .totals { display: flex; gap: 18px; margin-left: 24px; font-size: 13px; color: var(--muted); }
 header .totals b { color: var(--text); font-weight: 600; margin-right: 4px; }
 header .totals .zero { opacity: .5; }
+header .search { margin-left: 24px; width: 220px; padding: 4px 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--raised); border: 1px solid var(--border-strong); border-radius: 6px; outline: none; }
+header .search:focus { border-color: var(--accent); }
+header .search::placeholder { color: var(--faint); }
+.doing .match { color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 8px; }
 header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--faint); }
 header .hint kbd { font: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px; margin: 0 1px; color: var(--muted); }
 .live { display: flex; align-items: center; gap: 5px; white-space: nowrap; }

@@ -30,6 +30,7 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 - Per session: name, git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
 - Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
 - *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
+- Search (`/`): type a few words and the list becomes the sessions, open or closed, where one of your prompts contains them, with that prompt in the *Now* column. The whole history is searched, not only the recent sessions.
 
 <p align="center"><img src="docs/timeline.png" width="460" alt="Panel of a session: timeline strip with working and waiting segments, 5 turns, 1.2 h working, 1.1 h waiting, 1 pause; last answer, last prompt and edited files"></p>
 
@@ -51,7 +52,7 @@ From those two sources it derives, per session:
 - **Edited files**: the last eight `file-history-delta` paths, made relative to the session folder.
 - **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file), no `git` process; a `gitdir:` that resolves to a UNC path is rejected.
 - **Timeline**: your prompts and `end_turn` messages, collected in the same incremental pass as the token tally. A prompt opens a *working* segment, an `end_turn` opens a *waiting* one; waits longer than an hour count as pauses. Events older than the current process are ignored, so a resumed session starts a fresh timeline.
-- **Recent sessions**: `~/.claude/history.jsonl` (one line per prompt: project, session id, timestamp) is the index; the transcript tail is read once per closed session for title, last answer and model, and its full timeline only when you open it.
+- **Recent sessions**: `~/.claude/history.jsonl` (one line per prompt: project, session id, timestamp) is the index; the transcript tail is read once per closed session for title, last answer and model, and its full timeline only when you open it. The search is a substring match over the prompts in that same index, so a closed session whose transcript Claude Code has already cleaned up cannot be found.
 
 ### Technical decisions
 
@@ -66,7 +67,6 @@ From those two sources it derives, per session:
 ## Limitations
 
 - The context bar estimates the window (200k, or 1M once it exceeds 200k): Claude Code does not expose it.
-- A session stopped at a permission dialog is not distinguished (the registry only says busy/idle).
 - In the timeline, a turn that ends with a question to you is drawn as working until you answer (only `end_turn` closes a turn).
 
 ## Platforms

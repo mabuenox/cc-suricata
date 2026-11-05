@@ -63,6 +63,7 @@ const doing = (s) => {
   const extras = []
   if (s.background.length) extras.push(`<span class="tag">${s.background.length === 1 ? `${esc(s.background[0].tool)} in background` : `${s.background.length} in background`}</span>`)
   if (s.agents) extras.push(`<span class="tag">${s.agents} ${s.agents === 1 ? 'agent' : 'agents'}</span>`)
+  if (s.match) return `<span class="match">${esc(s.match)}</span>` // a search result: the prompt that matched is why it is here
   if (s.status === 'waiting') return esc(s.waitingQuestion)
   if (s.status === 'background') return `${extras.join('')}${esc(s.background[0].label)}`
   if (s.status === 'busy') return `${s.currentTool ? `<code>${esc(s.currentTool)}</code>` : ''}${extras.join('')}${esc(firstLine(s.lastAnswer?.text)) || (s.currentTool ? '' : 'Thinking')}`
@@ -70,6 +71,7 @@ const doing = (s) => {
 }
 
 let sessions = []
+let found = null // search results, shown instead of the sessions while the box has text
 let sorted = []
 let selectedId = null
 let peekOpen = false
@@ -101,15 +103,16 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
   <section><h3>Folder</h3><span class="path">${esc(s.cwd)}</span></section>`
 
 function render() {
-  sorted = [...sessions].sort((a, b) => groupOf(a) - groupOf(b) || b.updatedAt - a.updatedAt)
+  sorted = [...(found ?? sessions)].sort((a, b) => groupOf(a) - groupOf(b) || b.updatedAt - a.updatedAt)
   if (!sorted.some((s) => s.sessionId === selectedId)) selectedId = sorted[0]?.sessionId ?? null
-  const count = (g) => sorted.filter((s) => g.statuses.includes(s.status)).length
+  const count = (g) => sessions.filter((s) => g.statuses.includes(s.status)).length // the totals stay live while searching
   const pending = count(GROUPS[0]) + count(GROUPS[1])
   document.title = `${pending ? `(${pending}) ` : ''}Claude Code Suricata`
   document.getElementById('totals').innerHTML = GROUPS.slice(0, 3).map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
   const cols = '<div class="cols"><span></span><span>Session</span><span>Now</span><span>Model</span><span>Context</span><span class="r">Open</span><span class="r" title="Your prompts / model turns">Prompts</span><span class="r">Tokens</span><span class="r">Since</span></div>'
   document.getElementById('list').innerHTML = sorted.length
-    ? cols + GROUPS.map((g) => { const rows = sorted.filter((s) => g.statuses.includes(s.status)); return rows.length ? `<h2 class="${CLASS[g.statuses[0]]}">${g.label} <span>${rows.length}</span></h2>${rows.map(row).join('')}` : '' }).join('')
+    ? cols + GROUPS.map((g) => { const rows = sorted.filter((s) => g.statuses.includes(s.status)); return rows.length ? `<h2 class="${CLASS[g.statuses[0]]}">${found && g.label === 'Recent' ? 'Closed' : g.label} <span>${rows.length}</span></h2>${rows.map(row).join('')}` : '' }).join('')
+    : found ? '<div class="empty"><div><b>Nothing found</b>No prompt contains that text.</div></div>'
     : '<div class="empty"><div><b>No open sessions</b>Open Claude Code in a terminal and it will show up here.</div></div>'
   const s = sorted.find((x) => x.sessionId === selectedId)
   const open = peekOpen && s
@@ -145,11 +148,19 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (sorted.length) select(sorted[(i + (e.key === 'ArrowDown' ? 1 : -1) + sorted.length) % sorted.length].sessionId) }
   else if (e.key === 'Enter' && selectedId) select(selectedId, true)
   else if (e.key === 'Escape') select(selectedId, false)
+  else if (e.key === '/') { e.preventDefault(); q.focus() }
 })
+
+// Search: the whole prompt history, server side; results replace the list while the box has text.
+const q = document.getElementById('q')
+let searchTimer = null
+const search = () => { const text = q.value.trim(); if (text) fetch(`/search?q=${encodeURIComponent(text)}`).then((r) => r.json()).then((rows) => { if (q.value.trim() === text) { found = rows; render() } }) }
+q.addEventListener('input', () => { clearTimeout(searchTimer); if (q.value.trim()) searchTimer = setTimeout(search, 250); else { found = null; render() } })
+q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; found = null; q.blur(); render() } })
 
 const live = document.getElementById('live')
 const es = new EventSource('/events')
-es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render() }
+es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render(); search() }
 es.onerror = () => { live.textContent = 'offline'; live.classList.add('off') }
 const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
 setInterval(tick, 30000)

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { readTranscript, emptyTranscript, tally, derive } from './transcript.mjs'
-import { gitBranch, readHistory, isOwnSession, isAlive, recentSessions, forgetClosed, openTarget } from './sessions.mjs'
+import { gitBranch, readHistory, searchHistory, isOwnSession, isAlive, recentSessions, forgetClosed, openTarget } from './sessions.mjs'
 import { notifyCommand, findVsCode } from './platform.mjs'
 
 const PORT = Number(process.env.PORT ?? 4747)
@@ -70,9 +70,17 @@ function notifyChanges(sessions) {
   }
 }
 
+const HISTORY = join(CLAUDE, 'history.jsonl')
 const snap = () => {
   const sessions = readSessions()
-  return { sessions, recent: recentSessions(readHistory(join(CLAUDE, 'history.jsonl')), new Set(sessions.map((s) => s.sessionId)), findTranscript, tmpdir()) }
+  return { sessions, recent: recentSessions(readHistory(HISTORY), new Set(sessions.map((s) => s.sessionId)), findTranscript, tmpdir()) }
+}
+
+// Sessions, live or closed, where a prompt contains the text; the matched prompt comes along.
+function search(text) {
+  const hits = searchHistory(readHistory(HISTORY), text)
+  const live = snapshot.sessions.filter((s) => hits.has(s.sessionId)).map((s) => ({ ...s, match: hits.get(s.sessionId).match }))
+  return [...live, ...recentSessions(hits, new Set(snapshot.sessions.map((s) => s.sessionId)), findTranscript, tmpdir(), 50)]
 }
 
 if (process.argv.includes('--once')) {
@@ -84,6 +92,7 @@ if (process.argv.includes('--once')) {
 const CODE_EXE = findVsCode(process.platform, process.env.PATH ?? '', existsSync) // looked up once
 const clients = new Set()
 let snapshot = snap()
+let found = [] // the last search result: its sessions can be opened like the listed ones
 let timer = null
 function refresh() {
   clearTimeout(timer)
@@ -111,7 +120,7 @@ createServer((req, res) => {
     req.on('end', () => {
       try {
         const { sessionId, file } = JSON.parse(body)
-        const abs = openTarget([...snapshot.sessions, ...snapshot.recent], sessionId, file)
+        const abs = openTarget([...snapshot.sessions, ...snapshot.recent, ...found], sessionId, file)
         if (!CODE_EXE) throw new Error('VS Code is not on the PATH')
         spawn(CODE_EXE, ['--goto', abs], { stdio: 'ignore', windowsHide: true }).unref() // no shell: the path is not interpreted
         res.writeHead(204).end()
@@ -125,12 +134,18 @@ createServer((req, res) => {
   if (req.url.startsWith('/timeline?id=')) {
     const id = req.url.slice(13)
     try {
-      if (!snapshot.recent.some((x) => x.sessionId === id)) throw new Error('not listed')
+      if (![...snapshot.recent, ...found].some((x) => x.sessionId === id)) throw new Error('not listed')
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tally(findTranscript(id)).events))
     } catch {
       forgetClosed(id) // the transcript is gone (Claude Code cleanup): out of the list on the next refresh
       res.writeHead(404).end()
     }
+    return
+  }
+  // Sessions where a prompt contains the text, from the whole history.
+  if (req.url.startsWith('/search?')) {
+    found = search(new URL(req.url, 'http://localhost').searchParams.get('q') ?? '')
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(found))
     return
   }
   if (req.url === '/events') {

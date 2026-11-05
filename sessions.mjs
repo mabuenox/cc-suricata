@@ -31,7 +31,7 @@ export function readHistory(path) {
     return cached.bySession // no history yet: nothing closed to show
   }
   if (size === cached.size) return cached.bySession
-  const bySession = new Map() // sessionId -> { project, first, firstAt, lastAt, n }
+  const bySession = new Map() // sessionId -> { project, prompts, firstAt, lastAt }
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     let r
     try {
@@ -39,13 +39,25 @@ export function readHistory(path) {
     } catch {
       continue
     }
-    const h = bySession.get(r.sessionId) ?? { project: r.project, first: r.display, firstAt: r.timestamp, lastAt: r.timestamp, n: 0 }
-    h.n++
+    const h = bySession.get(r.sessionId) ?? { project: r.project, prompts: [], firstAt: r.timestamp, lastAt: r.timestamp }
+    h.prompts.push(r.display)
     h.lastAt = r.timestamp
     bySession.set(r.sessionId, h)
   }
   histories.set(path, { size, bySession })
   return bySession
+}
+
+// The sessions where a prompt contains the text (case-insensitive), each with the first prompt that matched.
+export function searchHistory(history, text) {
+  if (!text.trim()) return new Map()
+  const needle = text.toLowerCase()
+  const out = new Map()
+  for (const [id, h] of history) {
+    const match = h.prompts.find((p) => p.toLowerCase().includes(needle))
+    if (match) out.set(id, { ...h, match: match.split('\n')[0].slice(0, 200) })
+  }
+  return out
 }
 
 const underTemp = (cwd, tmp) => cwd.toLowerCase().startsWith(tmp.toLowerCase())
@@ -74,7 +86,7 @@ export function recentSessions(history, liveIds, transcriptOf, tmp, limit = 20) 
     if (!closedCache.has(id)) { const path = transcriptOf(id); closedCache.set(id, path ? readTranscript(path, h.project) : null) }
     const t = closedCache.get(id)
     if (!t?.lastAnswer) continue // empty sessions (just a /clear, a /resume…) add nothing
-    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.first.split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.n, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: '' })
+    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.prompts[0].split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.prompts.length, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: '', match: h.match })
     if (out.length === limit) break
   }
   return out

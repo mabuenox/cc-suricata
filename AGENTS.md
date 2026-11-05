@@ -65,7 +65,7 @@ cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code sessi
 - `server.mjs`: entry point. Watchers, SSE, the HTTP routes, spawning the notification and VS Code. Not importable (it binds a port at import), so nothing with logic lives here.
 - `platform.mjs`: what differs per OS, as pure functions that return argv: `notifyCommand` (`notify.ps1` / `osascript` / `notify-send`) and `findVsCode` (`Code.exe` next to the PATH entry on Windows, the `code` launcher elsewhere).
 - `transcript.mjs`: reads one transcript (`~/.claude/projects/<project>/<sessionId>.jsonl`). `readTranscript` walks the tail backwards; `tally` walks forwards and incrementally; `derive` is pure and turns registry + transcript into the state the page shows.
-- `sessions.mjs`: the live registry (`~/.claude/sessions/<pid>.json`), the closed-session index (`~/.claude/history.jsonl`), `gitBranch`, `openTarget`. Paths are parameters so tests run on fixtures.
+- `sessions.mjs`: the live registry (`~/.claude/sessions/<pid>.json`), the closed-session index (`~/.claude/history.jsonl`) and the prompt search over it, `gitBranch`, `openTarget`. Paths are parameters so tests run on fixtures.
 - `index.html`, `style.css`, `app.js`: the page. `app.js` is a classic script with global state on purpose: fake sessions are injected from the browser console for screenshots. Do not turn it into a module.
 - `notify.ps1`: the Windows toast (Windows PowerShell 5.1 only).
 - `test/`: `node:test`, no framework. `test/fixtures/*.jsonl` are minimal transcripts in the real record shape, one per case that broke once. The transcript format is undocumented and changes without notice: when a parser bug appears, add the fixture that reproduces it before fixing.

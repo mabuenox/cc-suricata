@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { gitBranch, readHistory, isOwnSession, isAlive, recentSessions, openTarget } from '../sessions.mjs'
+import { gitBranch, readHistory, searchHistory, isOwnSession, isAlive, recentSessions, openTarget } from '../sessions.mjs'
 
 const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url))
 const repo = (files) => {
@@ -41,12 +41,20 @@ test('gitBranch: an unreadable HEAD is reported and still shows nothing', () => 
   error.mock.restore()
 })
 
-test('readHistory: one entry per session with prompt count, first prompt and time span', () => {
+test('readHistory: one entry per session with its prompts and time span', () => {
   const h = readHistory(join(fixtures, 'history.jsonl'))
   assert.equal(h.size, 4)
-  assert.deepEqual(h.get('hist-live'), { project: 'C:\\Workspace\\acme-shop', first: 'Add pagination to the list', firstAt: 1767261600000, lastAt: 1767261900000, n: 2 })
+  assert.deepEqual(h.get('hist-live'), { project: 'C:\\Workspace\\acme-shop', prompts: ['Add pagination to the list', 'And sort by date'], firstAt: 1767261600000, lastAt: 1767261900000 })
   assert.equal(readHistory(join(fixtures, 'history.jsonl')), h) // unchanged file: same object
   assert.equal(readHistory(join(fixtures, 'missing.jsonl')).size, 0)
+})
+
+test('searchHistory: sessions with a prompt containing the text, case-insensitive, with the prompt that matched', () => {
+  const h = readHistory(join(fixtures, 'history.jsonl'))
+  assert.deepEqual([...searchHistory(h, 'SORT').keys()], ['hist-live'])
+  assert.equal(searchHistory(h, 'sort').get('hist-live').match, 'And sort by date')
+  assert.deepEqual([...searchHistory(h, 'the').keys()], ['hist-live', 'hist-temp', 'hist-closed'])
+  assert.equal(searchHistory(h, ' ').size, 0)
 })
 
 test('isOwnSession: interactive, with a folder outside the temp dir', () => {
