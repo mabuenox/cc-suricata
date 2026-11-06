@@ -118,10 +118,9 @@ let summaryReq = null
 function renderInsights() {
   const el = document.getElementById('insights')
   el.hidden = !sessions.some((s) => s.status !== 'closed')
-  const [next, ...rest] = findings
-  const link = (f) => `<a data-id="${f.sessionId}">${esc(f.text)}</a>`
+  const [next] = findings // one action, the most urgent; the others are in the list anyway, and in the suricata's prompt
   const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'looking at your sessions…' : 'nothing to say yet'}</span>`
-  el.innerHTML = `<div class="next">${next ? `<b>Next</b>${link(next)}` : 'Nothing stands out'}${rest.length ? `<span class="rest">also ${rest.map(link).join(' · ')}</span>` : ''}</div>`
+  el.innerHTML = `<div class="next">${next ? `<b>Next</b><a data-id="${next.sessionId}">${esc(next.text)}</a>` : 'Nothing stands out'}</div>`
     + `<p class="buddy">${HEAD}<span>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></span></p>` // the paragraph keeps its height while claude thinks: no jump
 }
 // Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.

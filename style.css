@@ -32,7 +32,6 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .insights { display: grid; gap: 4px; padding: 10px 20px; line-height: 1.5; color: var(--text); background: var(--side); border-bottom: 1px solid var(--border); }
 .insights .next { font-size: 15px; }
 .insights .next b { color: var(--need); font-weight: 600; margin-right: 10px; }
-.insights .rest { margin-left: 16px; font-size: 13px; color: var(--muted); }
 .insights a { color: inherit; text-decoration: underline dotted var(--faint); cursor: pointer; }
 .insights a:hover { color: var(--accent); }
 .insights p { display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 0; min-height: 3.6em; } /* the suricata speaking: its head, then a speech bubble */
