@@ -1,5 +1,11 @@
 // Claude Code Suricata page: receives the snapshot over SSE and renders it. Classic script (not a module): the top-level
 // variables are global on purpose, so data can be injected from the console (screenshots with fake data).
+// A branch: the fork glyph. A worktree: a trunk with its own branch beside the folder, the way `git worktree` puts a checkout in another folder.
+const GIT = {
+  branch: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="11" r="1.6"/><circle cx="10" cy="4.5" r="1.6"/><path d="M4 4.6v4.8M10 6.1c0 2.4-2 2.6-4 3.1" stroke-linecap="round"/></svg>',
+  worktree: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3.5h3.5l1.2 1.3h5.8v6.7H1.5z"/><path d="M5 9.5h4.5M7.3 9.5V7.2" stroke-linecap="round"/></svg>',
+}
+const gitLabel = (b) => { const wt = b.endsWith(' (worktree)'); return `${wt ? GIT.worktree : GIT.branch}${esc(wt ? b.slice(0, -11) : b)}` }
 const ICON = {
   // asking: "?"; waiting for you: the prompt chevron, your turn to type; working: in progress; background: in progress, dotted
   waiting: '<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="7"/><path d="M5.2 5.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.6-.9 1.2v.3" stroke="#191a1f" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="7" cy="10.6" r=".9" fill="#191a1f"/></svg>',
@@ -83,7 +89,7 @@ const subject = (s) => s.title ?? s.name ?? s.cwd
 const row = (s) => `
   <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
     ${ICON[s.status]}
-    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${esc([s.title && s.name !== s.title && s.name, s.branch || s.cwd].filter(Boolean).join(' · '))}</span></span>
+    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${s.title && s.name !== s.title ? `${esc(s.name)} · ` : ''}${s.branch ? gitLabel(s.branch) : esc(s.cwd)}</span></span>
     <span class="doing">${doing(s)}</span>
     <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
     ${gauge(s.contextTokens)}
