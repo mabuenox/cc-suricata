@@ -42,7 +42,8 @@ node server.mjs --no-open > /tmp/server.log 2>&1 & SRV=$!
 sleep 1.5
 curl -sf -o /dev/null http://localhost:4747/ && echo "page: 200"
 curl -s -o /dev/null -w "wrong host: %{http_code}\n" -H "Host: evil.test:4747" http://localhost:4747/
-curl -s -o /dev/null -w "cross-site: %{http_code}\n" -H "Sec-Fetch-Site: cross-site" "http://localhost:4747/summary?force=1"
+CROSS=$(curl -s -o /dev/null -w "%{http_code}" -H "Sec-Fetch-Site: cross-site" "http://localhost:4747/summary?force=1"); echo "cross-site summary: $CROSS"
+LINK=$(curl -s -o /dev/null -w "%{http_code}" -H "Sec-Fetch-Site: cross-site" -H "Sec-Fetch-Mode: navigate" -H "Sec-Fetch-Dest: document" http://localhost:4747/); echo "page from a link elsewhere: $LINK"
 
 echo "== 4. /open spawns code --goto"
 curl -s -o /dev/null -w "open listed: %{http_code}\n" -X POST -d '{"sessionId":"s-ask","file":"src/orders/list.tsx"}' http://localhost:4747/open
@@ -67,4 +68,4 @@ echo "sse events: $(grep -c '^data:' /tmp/sse.log) (2+ means the watcher fired)"
 echo "calls:"; cat /tmp/calls.log
 echo "server log:"; cat /tmp/server.log
 kill $SRV $KEEP 2>/dev/null || true
-grep -q '^notify-send ' /tmp/calls.log && grep -q '^code --goto /home/user/acme-shop/src/orders/list.tsx' /tmp/calls.log && grep -q '^claude -p --no-session-persistence' /tmp/calls.log && grep -q '^- acme-shop has been asking you' /tmp/prompt.txt && [ "$(grep -c '^data:' /tmp/sse.log)" -ge 2 ] && echo "ALL OK" || { echo "FAIL"; exit 1; }
+[ "$LINK" = 200 ] && [ "$CROSS" = 403 ] && grep -q '^notify-send ' /tmp/calls.log && grep -q '^code --goto /home/user/acme-shop/src/orders/list.tsx' /tmp/calls.log && grep -q '^claude -p --no-session-persistence' /tmp/calls.log && grep -q '^- acme-shop has been asking you' /tmp/prompt.txt && [ "$(grep -c '^data:' /tmp/sse.log)" -ge 2 ] && echo "ALL OK" || { echo "FAIL"; exit 1; }

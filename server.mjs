@@ -139,8 +139,13 @@ setInterval(refresh, 15_000) // in case a watcher misses something, and to keep 
 
 createServer((req, res) => {
   // Only from this machine: a remote site cannot read this through DNS rebinding.
-  // Nor from another site open in your browser: a page elsewhere could otherwise fire /summary (your tokens) or /open as a side effect.
-  if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host) || req.headers['sec-fetch-site'] === 'cross-site') {
+  if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host)) {
+    res.writeHead(403).end()
+    return
+  }
+  // The two routes with a side effect (VS Code, your tokens) are not for another site open in your browser. Reads need nothing:
+  // the same-origin policy keeps a foreign page from seeing them, and a link from elsewhere to the page itself must keep working.
+  if (['/open', '/summary'].includes(req.url.split('?')[0]) && req.headers['sec-fetch-site'] === 'cross-site') {
     res.writeHead(403).end()
     return
   }
