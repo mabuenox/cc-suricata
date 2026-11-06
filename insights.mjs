@@ -8,6 +8,8 @@ const CONTEXT = 85 // % of the estimated window
 const ago = (ms) => (ms < 90 * MIN ? `${Math.round(ms / MIN)} min` : `${(ms / 3600e3).toFixed(1)} h`)
 // shortcut: the window is estimated like the page's gauge (200k, or 1M above it), until Claude Code exposes it.
 const contextPct = (s) => (s.contextTokens ? Math.round((s.contextTokens / (s.contextTokens > 200_000 ? 1_000_000 : 200_000)) * 100) : 0)
+// What the session is about: the title Claude Code gives it, not the registry name ("workspace-1b" says nothing to its owner).
+const subject = (s) => s.title ?? s.name ?? s.cwd
 // Same reading as the page's "since" column for a session that needs you; the transcript-derived question has no registry time.
 const waitingSince = (s) => (s.status === 'idle' ? s.statusSince ?? s.updatedAt : s.updatedAt)
 
@@ -16,7 +18,7 @@ const waitingSince = (s) => (s.status === 'idle' ? s.statusSince ?? s.updatedAt 
 export function findings(sessions, now) {
   const out = []
   for (const s of sessions) {
-    const name = s.name ?? s.cwd
+    const name = subject(s)
     const waited = now - new Date(waitingSince(s))
     if (['waiting', 'idle'].includes(s.status) && waited > WAIT) {
       out.push({ kind: 'wait', sessionId: s.sessionId, text: `${name} has been ${s.status === 'waiting' ? 'asking you' : 'waiting for you'} for ${ago(waited)}`, rank: (s.status === 'waiting' ? 1e12 : 0) + waited })
@@ -37,7 +39,7 @@ export function summaryPrompt(sessions, found, now) {
   const line = (s) => {
     const since = s.status === 'busy' ? s.lastPrompt?.at ?? s.updatedAt : s.status === 'background' ? s.background[0]?.at ?? s.updatedAt : waitingSince(s)
     const facts = [
-      `${s.name ?? s.cwd} (folder ${basename(s.cwd)}${s.branch ? `, branch ${s.branch}` : ''})`,
+      `${subject(s)} (folder ${basename(s.cwd)}${s.branch ? `, branch ${s.branch}` : ''})`,
       `${s.status} for ${ago(now - new Date(since))}`,
       s.startedAt && `open for ${ago(now - new Date(s.startedAt))}`,
       `context ${contextPct(s)} %`,
@@ -53,7 +55,7 @@ export function summaryPrompt(sessions, found, now) {
   return [
     "You are a senior developer looking over a colleague's Claude Code sessions. Their page already shows, per session, the status, how long it has been there, context usage, prompt and turn counts, and the findings below, so never repeat or rephrase any of that.",
     'In one or two sentences, in English, say only what the list does not show by itself: a pattern across sessions, something that does not add up (an answer that reads like a failure or a loop, a question left hanging whose answer is in another session, work started and never picked up, two sessions on the same folder or branch, many prompts with little to show), or what you would do first and why. If nothing goes beyond the obvious, answer exactly: Nothing unusual.',
-    'Name sessions exactly as written. No preamble, no list, no markdown. At most 50 words.',
+    'Refer to a session by its title exactly as written, in its own language: that is what it is about, and the only way the reader can tell them apart. No preamble, no list, no markdown. At most 50 words.',
     '',
     `Findings:${found.length ? '' : ' none'}`,
     ...found.map((f) => `- ${f.text}`),

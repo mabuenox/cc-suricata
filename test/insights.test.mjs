@@ -10,6 +10,7 @@ test('findings: a long wait for you, a near-full context and an old background t
   assert.deepEqual(findings([live()], NOW), [])
   assert.deepEqual(findings([live({ status: 'idle', statusSince: min(14) })], NOW), []) // under the threshold
   assert.deepEqual(findings([live({ status: 'idle', statusSince: min(42) })], NOW), [{ kind: 'wait', sessionId: 's1', text: 'acme-shop has been waiting for you for 42 min' }])
+  assert.equal(findings([live({ title: 'Checkout totals', status: 'idle', statusSince: min(42) })], NOW)[0].text, 'Checkout totals has been waiting for you for 42 min') // the title, when there is one
   assert.deepEqual(findings([live({ status: 'waiting', updatedAt: min(100), statusSince: null })], NOW).map((f) => f.text), ['acme-shop has been asking you for 1.7 h'])
   assert.deepEqual(findings([live({ contextTokens: 180_000 })], NOW).map((f) => f.text), ['acme-shop is at 90 % of its context'])
   assert.deepEqual(findings([live({ status: 'background', background: [{ tool: 'Bash', label: 'npm test', at: min(31) }] })], NOW).map((f) => f.text), ['acme-shop has had Bash running in the background for 31 min'])
@@ -43,6 +44,7 @@ test('summaryPrompt: the findings and one line per session with the facts, and o
   assert.match(p, /^- acme-shop \(folder acme\) \| idle for 42 min \| context 25 % \| 3 prompts, 5 turns \| last prompt: go \| last answer: Done\.$/m)
   assert.doesNotMatch(p, /More\./)
   assert.match(p, /never repeat/)
+  assert.match(summaryPrompt([live({ title: 'Checkout totals' })], [], NOW), /^- Checkout totals \(folder acme\)/m)
   assert.match(summaryPrompt([live()], [], NOW), /^Findings: none$/m)
 })
 

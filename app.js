@@ -104,12 +104,12 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
   ${s.editedFiles.length ? `<section><h3>Edited files</h3><ul class="files">${s.editedFiles.map((f) => `<li><a href="#" data-file="${esc(f)}" title="Open in VS Code">${esc(f)}<span>open</span></a></li>`).join('')}</ul></section>` : ''}
   <section><h3>Folder</h3><span class="path">${esc(s.cwd)}</span></section>`
 
-// Session names in the summary become links to the row: the text answers "which one" by itself.
+// Session titles and names in the summary become links to the row: the text answers "which one" by itself.
 const linkNames = (text) => {
-  const live = sessions.filter((s) => s.status !== 'closed' && s.name).sort((a, b) => b.name.length - a.name.length) // longest first, so a name inside another is not cut
-  if (!live.length) return esc(text)
-  const names = new RegExp(live.map((s) => esc(s.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
-  return esc(text).replace(names, (m) => `<a data-id="${live.find((s) => esc(s.name) === m).sessionId}">${m}</a>`)
+  const labels = sessions.filter((s) => s.status !== 'closed').flatMap((s) => [s.title, s.name].filter(Boolean).map((l) => [esc(l), s.sessionId])).sort((a, b) => b[0].length - a[0].length) // longest first, so a label inside another is not cut
+  if (!labels.length) return esc(text)
+  const re = new RegExp(labels.map(([l]) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
+  return esc(text).replace(re, (m) => `<a data-id="${labels.find(([l]) => l === m)[1]}">${m}</a>`)
 }
 let summaryReq = null
 function renderInsights() {
