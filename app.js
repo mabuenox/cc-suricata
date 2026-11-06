@@ -111,6 +111,8 @@ const linkNames = (text) => {
   const re = new RegExp(labels.map(([l]) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
   return esc(text).replace(re, (m) => `<a data-id="${labels.find(([l]) => l === m)[1]}">${m}</a>`)
 }
+// The head of the mascot in icon.svg (same shapes, cropped), peeking at its speech bubble.
+const HEAD = '<svg viewBox="7 3 19 11.5" aria-hidden="true"><g fill="#d97757"><rect x="9" y="3.5" width="15" height="10.5" rx="4"/><rect x="7.5" y="6.5" width="2.5" height="3.2" rx="1"/><rect x="23" y="6.5" width="2.5" height="3.2" rx="1"/></g><g fill="#1b1b1f"><rect x="16" y="7" width="2.4" height="3.2" rx=".7"/><rect x="20.5" y="7" width="2.4" height="3.2" rx=".7"/></g></svg>'
 let summaryReq = null
 function renderInsights() {
   const el = document.getElementById('insights')
@@ -119,7 +121,7 @@ function renderInsights() {
   const link = (f) => `<a data-id="${f.sessionId}">${esc(f.text)}</a>`
   const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'looking at your sessions…' : 'nothing to say yet'}</span>`
   el.innerHTML = `<div class="next">${next ? `<b>Next</b>${link(next)}` : 'Nothing stands out'}${rest.length ? `<span class="rest">also ${rest.map(link).join(' · ')}</span>` : ''}</div>`
-    + `<p class="buddy"><img src="/icon.svg" alt="The suricata says" title="The suricata: a colleague on watch over your sessions, pointing out patterns and oddities the list does not show"><span>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></span></p>` // the paragraph keeps its height while claude thinks: no jump
+    + `<p class="buddy">${HEAD}<span>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></span></p>` // the paragraph keeps its height while claude thinks: no jump
 }
 // Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.
 const requestSummary = (force) => {
