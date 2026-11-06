@@ -20,7 +20,7 @@ test('gitBranch: branch, detached head, worktree with a relative gitdir', () => 
   assert.equal(gitBranch(repo({ '.git/HEAD': 'ref: refs/heads/feat/retries\n' })), 'feat/retries')
   assert.equal(gitBranch(repo({ '.git/HEAD': 'a1f3c9e0d2b4c6e8\n' })), 'a1f3c9e')
   const root = repo({ 'main/.git/HEAD': 'ref: refs/heads/main\n', 'main/.git/worktrees/wt/HEAD': 'ref: refs/heads/fix/cart\n', 'wt/.git': 'gitdir: ../main/.git/worktrees/wt\n' })
-  assert.equal(gitBranch(join(root, 'wt')), 'fix/cart')
+  assert.equal(gitBranch(join(root, 'wt')), 'fix/cart (worktree)')
 })
 
 test('gitBranch: nothing to show is an empty string, never an exception (not a repo, UNC gitdir)', () => {

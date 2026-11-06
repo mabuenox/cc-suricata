@@ -52,7 +52,7 @@ From those two sources it derives, per session:
 - **Model, permission mode, prompt and turn counters**: fields on the last typed prompt and the last assistant message.
 - **Generated tokens**: the sum of `output_tokens`, kept incrementally per transcript (only the bytes appended since the last read are parsed).
 - **Edited files**: the last eight `file-history-delta` paths, made relative to the session folder.
-- **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file), no `git` process; a `gitdir:` that resolves to a UNC path is rejected.
+- **Git branch**: `.git/HEAD` read directly (following a worktree's `gitdir:` file, and saying "(worktree)" after the branch), no `git` process; a `gitdir:` that resolves to a UNC path is rejected.
 - **Timeline**: your prompts and `end_turn` messages, collected in the same incremental pass as the token tally. A prompt opens a *working* segment, an `end_turn` opens a *waiting* one; waits longer than an hour count as pauses. Events older than the current process are ignored, so a resumed session starts a fresh timeline.
 - **Recent sessions**: `~/.claude/history.jsonl` (one line per prompt: project, session id, timestamp) is the index; the transcript tail is read once per closed session for title, last answer and model, and its full timeline only when you open it. The search is a substring match over the prompts in that same index, so a closed session whose transcript Claude Code has already cleaned up cannot be found.
 

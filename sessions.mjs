@@ -9,11 +9,12 @@ import { readTranscript } from './transcript.mjs'
 export function gitBranch(cwd) {
   try {
     let gitDir = join(cwd, '.git')
-    if (!statSync(gitDir).isDirectory()) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
+    const worktree = !statSync(gitDir).isDirectory() // a worktree has a `.git` file pointing at the main repo
+    if (worktree) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
     gitDir = resolve(cwd, gitDir) // relative to the worktree; resolved before looking at the root
     if (gitDir.startsWith('\\\\') || gitDir.startsWith('//')) return '' // a UNC path (\\host\…) would make a network request with credentials
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
-    return head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)
+    return (head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)) + (worktree ? ' (worktree)' : '')
   } catch (err) {
     if (!['ENOENT', 'ENOTDIR'].includes(err.code)) console.error(`git branch of ${cwd}:`, err.message) // not a repo is expected; anything else is not
     return ''
