@@ -29,11 +29,14 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .live.off { color: var(--need); } .live.off::before { background: var(--need); }
 
 /* Insights: findings as chips, and the summary paragraph */
-.insights { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 20px; font-size: 13px; color: var(--muted); background: var(--side); border-bottom: 1px solid var(--border); }
-.insights .chip { color: var(--need); background: var(--raised); border: 1px solid #f2994a55; border-radius: 999px; padding: 2px 10px; cursor: pointer; white-space: nowrap; }
-.insights .chip:hover, .insights a:hover { background: var(--hover); }
-.insights p { flex-basis: 100%; margin: 0; }
-.insights a { color: var(--text); text-decoration: underline dotted var(--faint); cursor: pointer; }
+.insights { display: grid; gap: 4px; padding: 8px 20px; font-size: 13px; line-height: 1.45; color: var(--muted); background: var(--side); border-bottom: 1px solid var(--border); }
+.insights .next { font-size: 14px; color: var(--text); }
+.insights .next b { color: var(--need); font-weight: 600; margin-right: 10px; }
+.insights .rest { margin-left: 16px; font-size: 12.5px; color: var(--faint); }
+.insights .rest a { color: var(--muted); }
+.insights a { color: inherit; text-decoration: underline dotted var(--faint); cursor: pointer; }
+.insights a:hover { color: var(--accent); }
+.insights p { margin: 0; min-height: 2.9em; } /* two lines reserved: the summary arrives seconds later and must not push the list */
 .insights .meta { color: var(--faint); font-size: 12px; margin-left: 8px; white-space: nowrap; }
 .insights button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 6px; margin-left: 6px; cursor: pointer; }
 .insights button:disabled { opacity: .5; cursor: default; }

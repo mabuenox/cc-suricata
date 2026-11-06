@@ -71,7 +71,7 @@ const doing = (s) => {
 }
 
 let sessions = []
-let findings = [] // facts worth a look, each pointing at a session
+let findings = [] // facts worth a look, most urgent first, each pointing at a session
 let summary = { text: null, at: 0 } // the two sentences from claude -p
 let found = null // search results, shown instead of the sessions while the box has text
 let sorted = []
@@ -114,9 +114,12 @@ const linkNames = (text) => {
 let summaryReq = null
 function renderInsights() {
   const el = document.getElementById('insights')
-  el.hidden = !findings.length && !summary.text
-  el.innerHTML = findings.map((f) => `<span class="chip" data-id="${f.sessionId}">${esc(f.text)}</span>`).join('')
-    + (summary.text ? `<p>${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span><button id="resummarize" ${summaryReq ? 'disabled' : ''}>${summaryReq ? 'thinking…' : 'again'}</button></p>` : '')
+  el.hidden = !sessions.some((s) => s.status !== 'closed')
+  const [next, ...rest] = findings
+  const link = (f) => `<a data-id="${f.sessionId}">${esc(f.text)}</a>`
+  const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'thinking…' : 'no summary'}</span>`
+  el.innerHTML = `<div class="next">${next ? `<b>Next</b>${link(next)}` : 'Nothing stands out'}${rest.length ? `<span class="rest">also ${rest.map(link).join(' · ')}</span>` : ''}</div>`
+    + `<p>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></p>` // the paragraph keeps its height while claude thinks: no jump
 }
 // Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.
 const requestSummary = (force) => {
