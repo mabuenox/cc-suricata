@@ -36,6 +36,7 @@ if (j.sessions.length !== 1 || s.status !== "waiting" || s.editedFiles[0] !== "s
 
 echo "== 3. fake notify-send and code on the PATH"
 for b in notify-send code; do printf '#!/bin/sh\necho "%s $*" >> /tmp/calls.log\n' "$b" > /usr/local/bin/$b; chmod +x /usr/local/bin/$b; done
+printf '#!/bin/sh\necho "claude $*" >> /tmp/calls.log\ncat > /tmp/prompt.txt\necho "acme-shop has been asking you for ages."\n' > /usr/local/bin/claude; chmod +x /usr/local/bin/claude
 : > /tmp/calls.log
 node server.mjs --no-open > /tmp/server.log 2>&1 & SRV=$!
 sleep 1.5
@@ -45,6 +46,10 @@ curl -s -o /dev/null -w "wrong host: %{http_code}\n" -H "Host: evil.test:4747" h
 echo "== 4. /open spawns code --goto"
 curl -s -o /dev/null -w "open listed: %{http_code}\n" -X POST -d '{"sessionId":"s-ask","file":"src/orders/list.tsx"}' http://localhost:4747/open
 curl -s -o /dev/null -w "open unlisted: %{http_code}\n" -X POST -d '{"sessionId":"s-ask","file":"../../etc/passwd"}' http://localhost:4747/open
+
+echo "== 4b. /summary runs the fake claude with the findings on stdin"
+curl -s http://localhost:4747/summary | grep -o '"text":"[^"]*"'
+grep -c "^- acme-shop has been asking you" /tmp/prompt.txt | sed 's/^/finding lines in prompt: /'
 
 echo "== 5. fs.watch recursive: a new transcript line reaches SSE"
 (timeout 6 curl -sN http://localhost:4747/events > /tmp/sse.log 2>/dev/null || true) &
@@ -61,4 +66,4 @@ echo "sse events: $(grep -c '^data:' /tmp/sse.log) (2+ means the watcher fired)"
 echo "calls:"; cat /tmp/calls.log
 echo "server log:"; cat /tmp/server.log
 kill $SRV $KEEP 2>/dev/null || true
-grep -q '^notify-send ' /tmp/calls.log && grep -q '^code --goto /home/user/acme-shop/src/orders/list.tsx' /tmp/calls.log && [ "$(grep -c '^data:' /tmp/sse.log)" -ge 2 ] && echo "ALL OK" || { echo "FAIL"; exit 1; }
+grep -q '^notify-send ' /tmp/calls.log && grep -q '^code --goto /home/user/acme-shop/src/orders/list.tsx' /tmp/calls.log && grep -q '^claude -p --no-session-persistence' /tmp/calls.log && grep -q '^- acme-shop has been asking you' /tmp/prompt.txt && [ "$(grep -c '^data:' /tmp/sse.log)" -ge 2 ] && echo "ALL OK" || { echo "FAIL"; exit 1; }

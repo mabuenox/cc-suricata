@@ -15,7 +15,8 @@
     "style.css",
     "app.js",
     "sessions.mjs",
-    "platform.mjs"
+    "platform.mjs",
+    "insights.mjs"
   ],
   "scripts": {
     "start": "node server.mjs",

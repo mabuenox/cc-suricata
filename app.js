@@ -71,6 +71,8 @@ const doing = (s) => {
 }
 
 let sessions = []
+let findings = [] // facts worth a look, each pointing at a session
+let summary = { text: null, at: 0 } // the two sentences from claude -p
 let found = null // search results, shown instead of the sessions while the box has text
 let sorted = []
 let selectedId = null
@@ -102,7 +104,29 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
   ${s.editedFiles.length ? `<section><h3>Edited files</h3><ul class="files">${s.editedFiles.map((f) => `<li><a href="#" data-file="${esc(f)}" title="Open in VS Code">${esc(f)}<span>open</span></a></li>`).join('')}</ul></section>` : ''}
   <section><h3>Folder</h3><span class="path">${esc(s.cwd)}</span></section>`
 
+// Session names in the summary become links to the row: the text answers "which one" by itself.
+const linkNames = (text) => {
+  const live = sessions.filter((s) => s.status !== 'closed' && s.name).sort((a, b) => b.name.length - a.name.length) // longest first, so a name inside another is not cut
+  if (!live.length) return esc(text)
+  const names = new RegExp(live.map((s) => esc(s.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
+  return esc(text).replace(names, (m) => `<a data-id="${live.find((s) => esc(s.name) === m).sessionId}">${m}</a>`)
+}
+let summaryReq = null
+function renderInsights() {
+  const el = document.getElementById('insights')
+  el.hidden = !findings.length && !summary.text
+  el.innerHTML = findings.map((f) => `<span class="chip" data-id="${f.sessionId}">${esc(f.text)}</span>`).join('')
+    + (summary.text ? `<p>${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span><button id="resummarize" ${summaryReq ? 'disabled' : ''}>${summaryReq ? 'thinking…' : 'again'}</button></p>` : '')
+}
+// Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.
+const requestSummary = (force) => {
+  if (document.visibilityState !== 'visible' || summaryReq || !sessions.some((s) => s.status !== 'closed')) return
+  summaryReq = fetch(`/summary${force ? '?force=1' : ''}`).then((r) => r.json()).then((s) => { summary = s }).catch(() => {}).finally(() => { summaryReq = null; renderInsights() })
+  renderInsights()
+}
+
 function render() {
+  renderInsights()
   sorted = [...(found ?? sessions)].sort((a, b) => groupOf(a) - groupOf(b) || b.updatedAt - a.updatedAt)
   if (!sorted.some((s) => s.sessionId === selectedId)) selectedId = sorted[0]?.sessionId ?? null
   const count = (g) => sessions.filter((s) => g.statuses.includes(s.status)).length // the totals stay live while searching
@@ -128,6 +152,12 @@ function render() {
 const list = document.getElementById('list')
 const select = (id, open) => { selectedId = id; if (open !== undefined) peekOpen = open; render(); list.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' }) }
 list.addEventListener('click', (e) => { const el = e.target.closest('.row'); if (el) select(el.dataset.id, true) })
+document.getElementById('insights').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-id]')
+  if (el) { if (found) { q.value = ''; found = null } select(el.dataset.id, true) } // a finding points at a live session: leave the search
+  else if (e.target.closest('#resummarize')) requestSummary(true)
+})
+document.addEventListener('visibilitychange', () => requestSummary())
 document.getElementById('peek').addEventListener('click', (e) => {
   if (e.target.closest('#close')) select(selectedId, false)
   const copy = e.target.closest('#copy')
@@ -160,7 +190,7 @@ q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; f
 
 const live = document.getElementById('live')
 const es = new EventSource('/events')
-es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render(); search() }
+es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; findings = d.findings ?? []; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render(); search(); requestSummary() }
 es.onerror = () => { live.textContent = 'offline'; live.classList.add('off') }
 const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
 setInterval(tick, 30000)

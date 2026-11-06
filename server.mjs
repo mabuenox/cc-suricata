@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process'
 import { readTranscript, emptyTranscript, tally, derive } from './transcript.mjs'
 import { gitBranch, readHistory, searchHistory, isOwnSession, isAlive, recentSessions, forgetClosed, openTarget } from './sessions.mjs'
 import { notifyCommand, findVsCode } from './platform.mjs'
+import { findings, signature, summaryPrompt, summaryCommand } from './insights.mjs'
 
 const PORT = Number(process.env.PORT ?? 4747)
 const CLAUDE = join(homedir(), '.claude')
@@ -73,7 +74,36 @@ function notifyChanges(sessions) {
 const HISTORY = join(CLAUDE, 'history.jsonl')
 const snap = () => {
   const sessions = readSessions()
-  return { sessions, recent: recentSessions(readHistory(HISTORY), new Set(sessions.map((s) => s.sessionId)), findTranscript, tmpdir()) }
+  return { sessions, findings: findings(sessions, Date.now()), recent: recentSessions(readHistory(HISTORY), new Set(sessions.map((s) => s.sessionId)), findTranscript, tmpdir()) }
+}
+
+// --- the two-sentence summary, written by `claude -p` ---
+// Regenerated when the signature changes (a session or a finding comes or goes), at most every two minutes unless asked
+// with the button; one process at a time. `text: null` when there is nothing to summarise or claude is not there.
+const SUMMARY_EVERY = 2 * 60_000
+let summary = { text: null, at: 0, signature: '', pending: null }
+function summarize(force) {
+  if (summary.pending) return summary.pending
+  const sig = signature(snapshot.sessions, snapshot.findings)
+  if (!snapshot.sessions.length) return Promise.resolve({ text: null, at: Date.now() })
+  if (!force && (sig === summary.signature || Date.now() - summary.at < SUMMARY_EVERY)) return Promise.resolve(summary)
+  const { cmd, args } = summaryCommand()
+  summary.pending = new Promise((resolve) => {
+    let out = ''
+    const done = (text) => { summary = { text, at: Date.now(), signature: sig, pending: null }; resolve(summary) }
+    try {
+      const p = spawn(cmd, args, { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true })
+      const timer = setTimeout(() => p.kill(), 60_000)
+      p.stdout.on('data', (d) => (out += d))
+      p.on('error', (err) => { console.error('summary failed:', err.message); done(null) }) // e.g. claude not on the PATH
+      p.on('close', (code) => { clearTimeout(timer); done(code === 0 && out.trim() ? out.trim() : null) })
+      p.stdin.end(summaryPrompt(snapshot.sessions, snapshot.findings, Date.now()))
+    } catch (err) {
+      console.error('summary failed:', err.message)
+      done(null)
+    }
+  })
+  return summary.pending
 }
 
 // Sessions, live or closed, where a prompt contains the text; the matched prompt comes along.
@@ -146,6 +176,11 @@ createServer((req, res) => {
   if (req.url.startsWith('/search?')) {
     found = search(new URL(req.url, 'http://localhost').searchParams.get('q') ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(found))
+    return
+  }
+  // The summary, generated on demand: the page asks only while it is visible.
+  if (req.url === '/summary' || req.url === '/summary?force=1') {
+    summarize(req.url.endsWith('force=1')).then(({ text, at }) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ text, at })))
     return
   }
   if (req.url === '/events') {

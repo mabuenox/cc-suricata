@@ -20,7 +20,7 @@ Starts the server at <http://localhost:4747> and opens your browser. Options:
 
 - `PORT=5000 npx cc-suricata` changes the port.
 - `--no-open` does not open the browser.
-- `--once` prints `{ sessions, recent }` as JSON and exits.
+- `--once` prints `{ sessions, findings, recent }` as JSON and exits.
 
 Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to an edited file opens it in VS Code (`code` must be on the PATH).
 
@@ -31,12 +31,14 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 - Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
 - *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
 - Search (`/`): type a few words and the list becomes the sessions, open or closed, where one of your prompts contains them, with that prompt in the *Now* column. The whole history is searched, not only the recent sessions.
+- Findings: a strip above the list with what a colleague would point out (a session waiting for you for more than 15 min, one above 85 % of its context, a background task older than 30 min). Each one is a chip that opens its session.
+- Summary: two or three sentences written by `claude -p` from those findings and the live rows, with the session names clickable. It is regenerated when a session or a finding comes or goes, at most every two minutes, and only while the page is visible: a minimised tab spends no tokens. "again" forces a new one. Needs `claude` on the PATH; without it the strip only shows the findings.
 
 <p align="center"><img src="docs/timeline.png" width="460" alt="Panel of a session: timeline strip with working and waiting segments, 5 turns, 1.2 h working, 1.1 h waiting, 1 pause; last answer, last prompt and edited files"></p>
 
 ## How it works
 
-Claude Code already keeps everything the watcher needs on disk. The server never talks to Claude Code; it just reads two places:
+Claude Code already keeps everything the watcher needs on disk. The server never talks to your sessions; it just reads two places (the summary is the one exception: its own `claude -p`, see below):
 
 1. **`~/.claude/sessions/<pid>.json`**: one file per live session, written by Claude Code itself. It carries the session id, name, working directory, `entrypoint` (`cli`, `claude-desktop`, `claude-vscode`, `sdk-*`), `startedAt` and a `status` (`busy`, `idle`, plus transient values such as `shell`). A file whose `pid` is no longer alive is ignored.
 2. **`~/.claude/projects/<project>/<sessionId>.jsonl`**: the transcript, appended live. Each line is a JSON record: your prompts (`type: user` with `origin.kind: human`), the model's messages (`type: assistant`, with `usage` and `stop_reason`), tool calls and their results, `file-history-delta` records for every edit, and `ai-title`.
@@ -59,9 +61,10 @@ From those two sources it derives, per session:
 - **No hooks, no plugin, no configuration.** An earlier version was a Claude Code plugin ("mod"); it could only see its own session, and settings hooks would have to be installed in every machine. Watching the files Claude Code already writes needs nothing and sees every session, including Desktop and VS Code ones.
 - **Transcripts are read backwards, in 512 KB chunks.** A transcript can be tens of MB; everything the list needs is in its last few records. The reader walks from the end and stops as soon as it has prompt, answer, title and turn end (or after ~1500 records), so a refresh costs milliseconds. The only full pass, the token tally, is done once and then kept incremental.
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
-- **No dependencies.** Three Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
+- **No dependencies.** A handful of Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes, `insights.mjs` draws conclusions, `platform.mjs` knows the OS) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard). `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
 - **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
+- **The summary is a `claude -p` with everything switched off.** `--no-session-persistence --tools "" --settings '{"disableAllHooks":true}' --strict-mcp-config --disable-slash-commands`, prompt over stdin, run from the temp folder: no transcript, no registry file, no history line, so the watcher has nothing to react to (a plain `claude -p` would write all three and take 30 s with plugin hooks; this one takes under 10). It uses your own account and `haiku`; the prompt carries only the findings and one line per live session. Not `--bare`: that only accepts an API key, not a login.
 - **Developed on Windows.** macOS and Linux have their own notifier and VS Code lookup, tested only by unit tests; see "Platforms" below.
 
 ## Limitations
@@ -89,7 +92,7 @@ cd cc-suricata
 node server.mjs
 ```
 
-No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, git branch and open check (tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
+No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, prompt search, git branch and open check (tested), `insights.mjs` the findings and the summary prompt and argv (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
 
 ```
 npm test
