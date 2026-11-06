@@ -42,6 +42,7 @@ node server.mjs --no-open > /tmp/server.log 2>&1 & SRV=$!
 sleep 1.5
 curl -sf -o /dev/null http://localhost:4747/ && echo "page: 200"
 curl -s -o /dev/null -w "wrong host: %{http_code}\n" -H "Host: evil.test:4747" http://localhost:4747/
+curl -s -o /dev/null -w "cross-site: %{http_code}\n" -H "Sec-Fetch-Site: cross-site" "http://localhost:4747/summary?force=1"
 
 echo "== 4. /open spawns code --goto"
 curl -s -o /dev/null -w "open listed: %{http_code}\n" -X POST -d '{"sessionId":"s-ask","file":"src/orders/list.tsx"}' http://localhost:4747/open

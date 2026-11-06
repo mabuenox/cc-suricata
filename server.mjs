@@ -139,7 +139,8 @@ setInterval(refresh, 15_000) // in case a watcher misses something, and to keep 
 
 createServer((req, res) => {
   // Only from this machine: a remote site cannot read this through DNS rebinding.
-  if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host)) {
+  // Nor from another site open in your browser: a page elsewhere could otherwise fire /summary (your tokens) or /open as a side effect.
+  if (![`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host) || req.headers['sec-fetch-site'] === 'cross-site') {
     res.writeHead(403).end()
     return
   }
