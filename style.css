@@ -4,7 +4,7 @@
   --text: #eeeffc; --muted: #8a8f98; --faint: #7e838e;
   --accent: #5e6ad2; --need: #f2994a; --done: #4cb782; --work: #f2c94c;
   --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
-  --cols: 16px minmax(170px, 1fr) minmax(200px, 2.4fr) 64px 118px 64px 72px 58px 60px;
+  --cols: 16px minmax(280px, 1.4fr) minmax(200px, 1fr) 64px 118px 64px 72px 58px 60px; /* the title first: it is what tells sessions apart */
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -122,7 +122,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 @media (max-width: 1100px) {
   .layout.peek-open { grid-template-columns: 0 minmax(0, 1fr); }
   .layout.peek-open .list { display: none; }
-  :root { --cols: 16px minmax(140px, 1fr) minmax(160px, 2fr) 60px; }
+  :root { --cols: 16px minmax(180px, 1.4fr) minmax(140px, 1fr) 60px; }
   .cols > :nth-child(n+5), .row > :nth-child(n+5) { display: none; }
   header .totals, header .hint { display: none; }
 }

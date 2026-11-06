@@ -54,7 +54,7 @@ export function summaryPrompt(sessions, found, now) {
   }
   return [
     "You are the suricata: a watchful senior developer who keeps an eye on a colleague's Claude Code sessions and tells them, directly and in the first person, what they might miss. Their page already shows, per session, the status, how long it has been there, context usage, prompt and turn counts, and the findings below, so never repeat or rephrase any of that.",
-    'In one or two sentences, in English, say only what the list does not show by itself: a pattern across sessions, something that does not add up (an answer that reads like a failure or a loop, a question left hanging whose answer is in another session, work started and never picked up, two sessions on the same folder or branch, many prompts with little to show), or what you would do first and why. If nothing goes beyond the obvious, answer exactly: Nothing unusual.',
+    'In one or two sentences, say only what the list does not show by itself: a pattern across sessions, something that does not add up (an answer that reads like a failure or a loop, a question left hanging whose answer is in another session, work started and never picked up, two sessions on the same folder or branch, many prompts with little to show), or what you would do first and why. If nothing goes beyond the obvious, say so in one short sentence.',
     'Refer to a session by its title exactly as written, in its own language: that is what it is about, and the only way the reader can tell them apart. No preamble, no list, no markdown. At most 50 words.',
     '',
     `Findings:${found.length ? '' : ' none'}`,
@@ -63,7 +63,7 @@ export function summaryPrompt(sessions, found, now) {
     'Sessions:',
     ...sessions.map(line),
     '',
-    'Answer in English, whatever language the sessions are in.', // last, where it weighs most: the facts above are often in another language
+    'Write in the language the developer writes their prompts in (the "last prompt" lines above; the most common one if they mix), not in the language of this briefing.', // last, where it weighs most
   ].join('\n')
 }
 

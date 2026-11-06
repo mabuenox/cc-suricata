@@ -45,6 +45,7 @@ test('summaryPrompt: the findings and one line per session with the facts, and o
   assert.match(p, /^- acme-shop \(folder acme\) \| idle for 42 min \| context 25 % \| 3 prompts, 5 turns \| last prompt: go \| last answer: Done\.$/m)
   assert.doesNotMatch(p, /More\./)
   assert.match(p, /never repeat/)
+  assert.match(p, /language the developer writes their prompts in/) // not English by default: the suricata speaks like its owner
   assert.match(summaryPrompt([live({ title: 'Checkout totals' })], [], NOW), /^- Checkout totals \(folder acme\)/m)
   assert.match(summaryPrompt([live()], [], NOW), /^Findings: none$/m)
 })
