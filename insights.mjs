@@ -20,9 +20,9 @@ export function findings(sessions, now) {
   for (const s of sessions) {
     const name = subject(s)
     const waited = now - new Date(waitingSince(s))
-    if (['waiting', 'idle'].includes(s.status) && waited > WAIT) {
-      out.push({ kind: 'wait', sessionId: s.sessionId, text: `${name} has been ${s.status === 'waiting' ? 'asking you' : 'waiting for you'} for ${ago(waited)}`, rank: (s.status === 'waiting' ? 1e12 : 0) + waited })
-    }
+    // A question for you is always next, however fresh: that session is stopped until you answer. A finished turn only after a while.
+    if (s.status === 'waiting') out.push({ kind: 'wait', sessionId: s.sessionId, text: waited > WAIT ? `${name} has been asking you for ${ago(waited)}` : `${name} is asking you`, rank: 1e12 + waited })
+    else if (s.status === 'idle' && waited > WAIT) out.push({ kind: 'wait', sessionId: s.sessionId, text: `${name} has been waiting for you for ${ago(waited)}`, rank: waited })
     if (contextPct(s) > CONTEXT) out.push({ kind: 'context', sessionId: s.sessionId, text: `${name} is at ${contextPct(s)} % of its context`, rank: -1 })
     const oldest = s.background?.find((b) => now - new Date(b.at) > BACKGROUND)
     if (oldest) out.push({ kind: 'background', sessionId: s.sessionId, text: `${name} has had ${oldest.tool} running in the background for ${ago(now - new Date(oldest.at))}`, rank: -2 })
@@ -53,7 +53,7 @@ export function summaryPrompt(sessions, found, now) {
     return `- ${facts.filter(Boolean).join(' | ')}`
   }
   return [
-    "You are a senior developer looking over a colleague's Claude Code sessions. Their page already shows, per session, the status, how long it has been there, context usage, prompt and turn counts, and the findings below, so never repeat or rephrase any of that.",
+    "You are the suricata: a watchful senior developer who keeps an eye on a colleague's Claude Code sessions and tells them, directly and in the first person, what they might miss. Their page already shows, per session, the status, how long it has been there, context usage, prompt and turn counts, and the findings below, so never repeat or rephrase any of that.",
     'In one or two sentences, in English, say only what the list does not show by itself: a pattern across sessions, something that does not add up (an answer that reads like a failure or a loop, a question left hanging whose answer is in another session, work started and never picked up, two sessions on the same folder or branch, many prompts with little to show), or what you would do first and why. If nothing goes beyond the obvious, answer exactly: Nothing unusual.',
     'Refer to a session by its title exactly as written, in its own language: that is what it is about, and the only way the reader can tell them apart. No preamble, no list, no markdown. At most 50 words.',
     '',

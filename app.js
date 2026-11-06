@@ -117,9 +117,9 @@ function renderInsights() {
   el.hidden = !sessions.some((s) => s.status !== 'closed')
   const [next, ...rest] = findings
   const link = (f) => `<a data-id="${f.sessionId}">${esc(f.text)}</a>`
-  const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'thinking…' : 'no summary'}</span>`
+  const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'looking at your sessions…' : 'nothing to say yet'}</span>`
   el.innerHTML = `<div class="next">${next ? `<b>Next</b>${link(next)}` : 'Nothing stands out'}${rest.length ? `<span class="rest">also ${rest.map(link).join(' · ')}</span>` : ''}</div>`
-    + `<p>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></p>` // the paragraph keeps its height while claude thinks: no jump
+    + `<p class="buddy"><img src="/icon.svg" alt="The suricata says" title="The suricata: a colleague on watch over your sessions, pointing out patterns and oddities the list does not show"><span>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></span></p>` // the paragraph keeps its height while claude thinks: no jump
 }
 // Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.
 const requestSummary = (force) => {

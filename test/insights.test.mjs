@@ -12,6 +12,7 @@ test('findings: a long wait for you, a near-full context and an old background t
   assert.deepEqual(findings([live({ status: 'idle', statusSince: min(42) })], NOW), [{ kind: 'wait', sessionId: 's1', text: 'acme-shop has been waiting for you for 42 min' }])
   assert.equal(findings([live({ title: 'Checkout totals', status: 'idle', statusSince: min(42) })], NOW)[0].text, 'Checkout totals has been waiting for you for 42 min') // the title, when there is one
   assert.deepEqual(findings([live({ status: 'waiting', updatedAt: min(100), statusSince: null })], NOW).map((f) => f.text), ['acme-shop has been asking you for 1.7 h'])
+  assert.deepEqual(findings([live({ status: 'waiting', updatedAt: min(1), statusSince: null })], NOW).map((f) => f.text), ['acme-shop is asking you']) // a question has no threshold: it is next
   assert.deepEqual(findings([live({ contextTokens: 180_000 })], NOW).map((f) => f.text), ['acme-shop is at 90 % of its context'])
   assert.deepEqual(findings([live({ status: 'background', background: [{ tool: 'Bash', label: 'npm test', at: min(31) }] })], NOW).map((f) => f.text), ['acme-shop has had Bash running in the background for 31 min'])
 })
@@ -22,7 +23,7 @@ test('findings: the most urgent first: a question for you, then the longest wait
     live({ sessionId: 'ctx', name: 'ctx', contextTokens: 190_000 }),
     live({ sessionId: 'w1', name: 'w1', status: 'idle', statusSince: min(20) }),
     live({ sessionId: 'w2', name: 'w2', status: 'idle', statusSince: min(60) }),
-    live({ sessionId: 'ask', name: 'ask', status: 'waiting', updatedAt: min(16), statusSince: null }),
+    live({ sessionId: 'ask', name: 'ask', status: 'waiting', updatedAt: min(2), statusSince: null }), // fresh, and still first
   ]
   assert.deepEqual(findings(list, NOW).map((f) => f.sessionId), ['ask', 'w2', 'w1', 'ctx', 'bg'])
   assert.deepEqual(Object.keys(findings(list, NOW)[0]), ['kind', 'sessionId', 'text'])
