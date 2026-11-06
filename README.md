@@ -27,7 +27,7 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 ## What it shows
 
 - Groups: *Need you* (a session is asking you a question), *Waiting for you* (turn finished) and *Working* (running, or with background tasks).
-- Per session: name, git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
+- Per session: title (what it is about, the one Claude Code gives it from the first prompt), name and git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
 - Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
 - *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
 - Search (`/`): type a few words and the list becomes the sessions, open or closed, where one of your prompts contains them, with that prompt in the *Now* column. The whole history is searched, not only the recent sessions.

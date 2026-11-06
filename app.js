@@ -78,10 +78,12 @@ let sorted = []
 let selectedId = null
 let peekOpen = false
 
+// What the session is about: the title Claude Code gave it from the first prompt; the registry name ("workspace-1b") goes under it.
+const subject = (s) => s.title ?? s.name ?? s.cwd
 const row = (s) => `
   <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
     ${ICON[s.status]}
-    <span class="who"><span class="name">${esc(s.name ?? s.cwd)}${src(s)}</span><span class="branch">${esc(s.branch || s.cwd)}</span></span>
+    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${esc([s.title && s.name !== s.title && s.name, s.branch || s.cwd].filter(Boolean).join(' · '))}</span></span>
     <span class="doing">${doing(s)}</span>
     <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
     ${gauge(s.contextTokens)}
@@ -92,8 +94,7 @@ const row = (s) => `
   </div>`
 
 const peek = (s) => `
-  <div class="head">${pill(s)}<h1>${esc(s.name ?? s.cwd)}</h1><button class="close" id="close" title="Close (Esc)" aria-label="Close">×</button></div>
-  ${s.title && s.title !== s.name ? `<section><h3>Title</h3>${esc(s.title)}</section>` : ''}
+  <div class="head">${pill(s)}<h1>${esc(subject(s))}</h1><button class="close" id="close" title="Close (Esc)" aria-label="Close">×</button></div>
   ${s.waitingQuestion ? `<section><div class="question">${esc(s.waitingQuestion)}</div></section>` : ''}
   ${s.status === 'closed' ? `<section><h3>Resume<button class="copy" id="copy">copy</button></h3><pre class="cmd"><code class="language-bash">cd "${esc(s.cwd)}"
 claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
