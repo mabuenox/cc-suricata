@@ -1,6 +1,6 @@
 {
   "name": "cc-suricata",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Claude Code Watcher: all your Claude Code sessions on one local page, with a notification when one finishes or asks you something",
   "type": "module",
   "bin": {
