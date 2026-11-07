@@ -77,3 +77,8 @@ test('tally: incremental tokens and events, and the timeline starts at the curre
   assert.equal(s.outputTokens, 22)
   assert.deepEqual(s.events, [[ms('2026-01-01T10:03:05Z'), 'e']])
 })
+
+test('readTranscript: the branch is the one of the last record, empty when the records have none', () => {
+  assert.equal(readTranscript(fx('ask'), 'C:\Workspace\acme-shop').branch, 'feat/pagination') // the first record says main
+  assert.equal(readTranscript(fx('bg-notified')).branch, '')
+})

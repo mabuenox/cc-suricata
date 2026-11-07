@@ -6,15 +6,17 @@ import { readTranscript } from './transcript.mjs'
 
 // Git branch of the folder without running git: reads .git/HEAD (or a worktree's gitdir).
 // Returns '' when there is nothing to show: the branch is decorative and must never break the list.
+// A worktree has a `.git` file pointing at the main repo, where a checkout has a `.git` folder.
+const isWorktree = (cwd) => { try { return statSync(join(cwd, '.git')).isFile() } catch { return false } }
+const worktreeMark = (cwd) => (isWorktree(cwd) ? ' (worktree)' : '')
 export function gitBranch(cwd) {
   try {
     let gitDir = join(cwd, '.git')
-    const worktree = !statSync(gitDir).isDirectory() // a worktree has a `.git` file pointing at the main repo
-    if (worktree) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
+    if (isWorktree(cwd)) gitDir = readFileSync(gitDir, 'utf8').replace(/^gitdir:\s*/, '').trim()
     gitDir = resolve(cwd, gitDir) // relative to the worktree; resolved before looking at the root
     if (gitDir.startsWith('\\\\') || gitDir.startsWith('//')) return '' // a UNC path (\\host\…) would make a network request with credentials
     const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim()
-    return (head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)) + (worktree ? ' (worktree)' : '')
+    return (head.startsWith('ref: refs/heads/') ? head.slice(16) : head.slice(0, 7)) + worktreeMark(cwd)
   } catch (err) {
     if (!['ENOENT', 'ENOTDIR'].includes(err.code)) console.error(`git branch of ${cwd}:`, err.message) // not a repo is expected; anything else is not
     return ''
@@ -87,7 +89,7 @@ export function recentSessions(history, liveIds, transcriptOf, tmp, limit = 20) 
     if (!closedCache.has(id)) { const path = transcriptOf(id); closedCache.set(id, path ? readTranscript(path, h.project) : null) }
     const t = closedCache.get(id)
     if (!t?.lastAnswer) continue // empty sessions (just a /clear, a /resume…) add nothing
-    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.prompts[0].split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.prompts.length, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: '', match: h.match })
+    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.prompts[0].split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.prompts.length, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: t.branch && t.branch + worktreeMark(h.project), match: h.match })
     if (out.length === limit) break
   }
   return out

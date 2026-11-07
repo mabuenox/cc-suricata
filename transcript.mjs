@@ -52,6 +52,7 @@ export const emptyTranscript = () => ({
   background: [], // tasks launched with run_in_background that have not reported their end yet
   agentsAt: [], // timestamps of foreground Agents without a result
   pendingAt: null, // timestamp of the tool in progress
+  branch: '', // the git branch of the last record: what a closed session was on, whatever the folder is on now
 })
 
 // Walks the transcript backwards and extracts what the row and the panel show. Because it walks backwards,
@@ -70,6 +71,7 @@ export function readTranscript(path, cwd = '') {
     seen.records++
     noteEditedFile(r, out, cwd)
     if (r.type === 'ai-title') out.title ??= r.aiTitle
+    if (!out.branch && r.gitBranch && r.gitBranch !== 'HEAD') out.branch = r.gitBranch // "HEAD": not a repo, or detached
     if (r.isSidechain) continue
     if (r.type === 'user') noteUserRecord(r, out, seen)
     if (r.type === 'assistant' && Array.isArray(r.message?.content)) noteAssistantRecord(r, out, seen)

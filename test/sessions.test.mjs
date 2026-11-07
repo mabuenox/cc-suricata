@@ -83,7 +83,7 @@ test('recentSessions: closed sessions from the history, newest first, skipping l
   assert.equal(s.cwd, 'C:\\Workspace\\docs-site')
   assert.deepEqual([s.startedAt, s.updatedAt], [1767262200000, 1767262200000])
   assert.equal(s.lastAnswer.text, 'Done: pages of 20.')
-  assert.equal(s.branch, '')
+  assert.equal(s.branch, 'feat/pagination') // from the transcript: the folder may be on another branch by now, or gone
 })
 
 test('openTarget: only a file the watcher listed for that session, and only if it exists', () => {
