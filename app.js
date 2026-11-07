@@ -5,7 +5,13 @@ const GIT = {
   branch: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="11" r="1.6"/><circle cx="10" cy="4.5" r="1.6"/><path d="M4 4.6v4.8M10 6.1c0 2.4-2 2.6-4 3.1" stroke-linecap="round"/></svg>',
   worktree: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3.5h3.5l1.2 1.3h5.8v6.7H1.5z"/><path d="M5 9.5h4.5M7.3 9.5V7.2" stroke-linecap="round"/></svg>',
 }
-const gitLabel = (b) => { const wt = b.endsWith(' (worktree)'); return `${wt ? GIT.worktree : GIT.branch}${esc(wt ? b.slice(0, -11) : b)}` }
+const FOLDER = '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3.5h3.5l1.2 1.3h5.8v6.7H1.5z"/></svg>'
+// Where the session runs: its branch (or worktree), else the folder's own name; the full path is the row's tooltip and in the panel.
+const place = (s) => {
+  if (!s.branch) return `${FOLDER}${esc(s.cwd.split(/[\\/]/).filter(Boolean).pop() ?? s.cwd)}`
+  const wt = s.branch.endsWith(' (worktree)')
+  return `${wt ? GIT.worktree : GIT.branch}${esc(wt ? s.branch.slice(0, -11) : s.branch)}`
+}
 const ICON = {
   // asking: "?"; waiting for you: the prompt chevron, your turn to type; working: in progress; background: in progress, dotted
   waiting: '<svg viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="7"/><path d="M5.2 5.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.6-.9 1.2v.3" stroke="#191a1f" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="7" cy="10.6" r=".9" fill="#191a1f"/></svg>',
@@ -89,7 +95,7 @@ const subject = (s) => s.title ?? s.name ?? s.cwd
 const row = (s) => `
   <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
     ${ICON[s.status]}
-    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${s.title && s.name !== s.title ? `${esc(s.name)} · ` : ''}${s.branch ? gitLabel(s.branch) : esc(s.cwd)}</span></span>
+    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${s.title && s.name !== s.title ? `${esc(s.name)} · ` : ''}${place(s)}</span></span>
     <span class="doing">${doing(s)}</span>
     <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
     ${gauge(s.contextTokens)}
@@ -116,7 +122,7 @@ const linkNames = (text) => {
   const labels = sessions.filter((s) => s.status !== 'closed').flatMap((s) => [s.title, s.name].filter(Boolean).map((l) => [esc(l), s.sessionId])).sort((a, b) => b[0].length - a[0].length) // longest first, so a label inside another is not cut
   if (!labels.length) return esc(text)
   const re = new RegExp(labels.map(([l]) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
-  return esc(text).replace(re, (m) => `<a data-id="${labels.find(([l]) => l === m)[1]}">${m}</a>`)
+  return esc(text).replace(re, (m) => `<a data-id="${labels.find(([l]) => l === m)[1]}" tabindex="0">${m}</a>`)
 }
 // The head of the mascot in icon.svg (same shapes, cropped), peeking at its speech bubble.
 const HEAD = '<svg viewBox="7 3 19 11.5" aria-hidden="true"><g fill="#d97757"><rect x="9" y="3.5" width="15" height="10.5" rx="4"/><rect x="7.5" y="6.5" width="2.5" height="3.2" rx="1"/><rect x="23" y="6.5" width="2.5" height="3.2" rx="1"/></g><g fill="#1b1b1f"><rect x="16" y="7" width="2.4" height="3.2" rx=".7"/><rect x="20.5" y="7" width="2.4" height="3.2" rx=".7"/></g></svg>'
@@ -126,7 +132,7 @@ function renderInsights() {
   el.hidden = !sessions.some((s) => s.status !== 'closed')
   const [next] = findings // one action, the most urgent; the others are in the list anyway, and in the suricata's prompt
   const text = summary.text ? `${linkNames(summary.text)}<span class="meta">${dur(Date.now() - summary.at)} ago</span>` : `<span class="meta">${summaryReq ? 'looking at your sessions…' : 'nothing to say yet'}</span>`
-  el.innerHTML = `<div class="next">${next ? `<b>Next</b><a data-id="${next.sessionId}">${esc(next.text)}</a>` : 'Nothing stands out'}</div>`
+  el.innerHTML = `<div class="next">${next ? `<b>Next</b><a data-id="${next.sessionId}" tabindex="0">${esc(next.text)}</a>` : '<span class="none">Nothing stands out</span>'}</div>`
     + `<p class="buddy">${HEAD}<span>${text}<button id="resummarize" ${summaryReq ? 'disabled' : ''}>again</button></span></p>` // the paragraph keeps its height while claude thinks: no jump
 }
 // Only while the tab is visible: a minimised page does not spend your tokens. The server caches, so asking often is free.
@@ -168,6 +174,7 @@ document.getElementById('insights').addEventListener('click', (e) => {
   if (el) { if (found) { q.value = ''; found = null } select(el.dataset.id, true) } // a finding points at a live session: leave the search
   else if (e.target.closest('#resummarize')) requestSummary(true)
 })
+document.getElementById('insights').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('a[data-id]')) e.target.click() })
 document.addEventListener('visibilitychange', () => requestSummary())
 document.getElementById('peek').addEventListener('click', (e) => {
   if (e.target.closest('#close')) select(selectedId, false)
