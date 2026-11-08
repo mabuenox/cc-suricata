@@ -1,0 +1,23 @@
+{
+  "name": "cc-suricata",
+  "version": "0.1.0",
+  "description": "Your other Claude Code sessions in the terminal: the next thing to do above the prompt, a toast when one asks you, and a /suricata pane",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "port": {
+      "title": "Server port",
+      "type": "number",
+      "description": "Port of the cc-suricata server",
+      "default": 4747
+    },
+    "autostart": {
+      "title": "Start the server",
+      "type": "boolean",
+      "description": "Start the cc-suricata server when it is not running",
+      "default": true
+    }
+  },
+  "author": {
+    "name": "mabuenox"
+  }
+}

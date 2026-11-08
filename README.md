@@ -21,6 +21,7 @@ Starts the server at <http://localhost:4747> and opens your browser. Options:
 - `PORT=5000 npx cc-suricata` changes the port.
 - `--no-open` does not open the browser.
 - `--once` prints `{ sessions, findings, recent }` as JSON and exits.
+- `--daemon` starts the server detached and exits (what the terminal mod uses).
 
 Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to an edited file opens it in VS Code (`code` must be on the PATH).
 
@@ -35,6 +36,23 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 - The suricata: one or two sentences written by `claude -p`, shown as the mascot speaking, on what the list does not show by itself (a pattern across sessions, something that does not add up, what to do first and why), never a rephrase of the rows; "Nothing unusual." when there is nothing. Session names are clickable. It is regenerated when a session or a finding comes or goes, at most every two minutes, and only while the page is visible: a minimised tab spends no tokens. Its two lines are reserved, so the list does not jump when it arrives. "again" forces a new one. Needs `claude` on the PATH; without it the strip shows only the findings.
 
 <p align="center"><img src="docs/timeline.png" width="460" alt="Panel of a session: timeline strip with working and waiting segments, 5 turns, 1.2 h working, 1.1 h waiting, 1 pause; last answer, last prompt and edited files"></p>
+
+## In the terminal
+
+The same watch, inside Claude Code, as a plugin:
+
+```
+/plugin install cc-suricata --marketplace mabuenox/cc-suricata
+```
+
+Answer `y` to add the marketplace, then pick a scope. From then on every session shows what matters about your *other* sessions (the one you are typing in is left out):
+
+- A line above the prompt with the next thing to do, when there is one (`s` opens the pane).
+- The counts in the status line: asking, waiting, working.
+- A toast when another session starts asking you something.
+- `/suricata` opens a pane with the list (title, branch, time in that state, asking first) and the suricata's sentence if the page has asked for one. It is drawn from 110 columns.
+
+The plugin polls `/snapshot` on the cc-suricata server every 5 s and starts it (`--daemon`) when it is not running. `/config` has its two options: the port and whether to start the server.
 
 ## How it works
 
@@ -92,13 +110,13 @@ cd cc-suricata
 node server.mjs
 ```
 
-No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, prompt search, git branch and open check (tested), `insights.mjs` the findings and the summary prompt and argv (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
+No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, prompt search, git branch and open check (tested), `insights.mjs` the findings and the summary prompt and argv (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification. `hooks/register.tsx` is the Claude Code plugin (band, status line, toasts, `/suricata` pane; `types/index.d.ts` its state contract), with `.claude-plugin/` making the repository a plugin marketplace; `claude --plugin-dir .` loads it in a session while you edit it.
 
 ```
 npm test
 ```
 
-The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point (a pending question, background tasks finished, stopped or still running, a resumed session, a subagent), and the session index, git branch reading and the `/open` check on fixtures and temp folders. They run in CI on every pull request and before each publish.
+The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point (a pending question, background tasks finished, stopped or still running, a resumed session, a subagent), and the session index, git branch reading and the `/open` check on fixtures and temp folders. They run in CI on every pull request and before each publish. `claude plugin test .` runs the plugin's tests (`hooks/register.test.tsx`) and `claude plugin validate .` checks it the way the engine will.
 
 ### Releases
 

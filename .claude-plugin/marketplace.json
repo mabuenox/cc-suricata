@@ -1,0 +1,13 @@
+{
+  "name": "cc-suricata",
+  "owner": {
+    "name": "mabuenox"
+  },
+  "plugins": [
+    {
+      "name": "cc-suricata",
+      "source": "./"
+    }
+  ],
+  "description": "cc-suricata: your Claude Code sessions, in the browser and in the terminal"
+}

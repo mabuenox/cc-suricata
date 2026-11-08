@@ -117,6 +117,12 @@ if (process.argv.includes('--once')) {
   console.log(JSON.stringify(snap(), null, 2))
   process.exit(0)
 }
+// `--daemon`: start a server that outlives this process (the terminal mod uses it: its own children die with the session).
+// A second instance finds the port taken and dies on its own.
+if (process.argv.includes('--daemon')) {
+  spawn(process.execPath, [fileURLToPath(import.meta.url), '--no-open'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  process.exit(0)
+}
 
 // --- server ---
 const CODE_EXE = findVsCode(process.platform, process.env.PATH ?? '', existsSync) // looked up once
@@ -182,6 +188,12 @@ createServer((req, res) => {
   if (req.url.startsWith('/search?')) {
     found = search(new URL(req.url, 'http://localhost').searchParams.get('q') ?? '')
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(found))
+    return
+  }
+  // What the terminal mod polls: the live sessions without their timeline events, the findings and the cached summary (never generated here).
+  if (req.url === '/snapshot') {
+    const sessions = snapshot.sessions.map(({ events, ...s }) => s)
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ sessions, findings: snapshot.findings, summary: { text: summary.text, at: summary.at } }))
     return
   }
   // The summary, generated on demand: the page asks only while it is visible.
