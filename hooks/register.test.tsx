@@ -15,7 +15,7 @@ const PANE = { plugin: 'cc-suricata', component: 'Pane', requestId: 'suricata', 
 
 // The engine beneath the plugin: each answer is what a session would give.
 function engine(on: On, answer: () => { ok: boolean; text: string }) {
-  const seen = { toasts: [] as string[], runs: [] as (readonly string[])[], status: [] as (string | undefined)[] }
+  const seen = { toasts: [] as string[], runs: [] as (readonly string[])[], envs: [] as (Record<string, string> | undefined)[], status: [] as (string | undefined)[] }
   on('session.id', () => ({ value: OWN }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'suricata' } }))
@@ -25,6 +25,7 @@ function engine(on: On, answer: () => { ok: boolean; text: string }) {
   })
   on('process.run', (_, e) => {
     seen.runs.push(e.argv)
+    seen.envs.push(e.init?.env)
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('ui.toast', (_, e) => {
@@ -61,9 +62,10 @@ test('newlyAsking: a transition into waiting, not a session first seen asking', 
 })
 
 test('the band shows the next action of another session, on the terminal and the desktop', async ($, on) => {
-  mock.clock(on)
+  const clock = mock.clock(on)
   engine(on, () => ({ ok: true, text: payload([session(OWN, 'waiting', 'Mine'), session('b', 'waiting', 'Orders list pagination')]) }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
@@ -73,13 +75,14 @@ test('the band shows the next action of another session, on the terminal and the
 })
 
 test('nothing from the others: the band is left to the engine', async ($, on) => {
-  mock.clock(on)
+  const clock = mock.clock(on)
   engine(on, () => ({ ok: true, text: payload([session(OWN, 'waiting', 'Mine')]) }))
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
 
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
@@ -108,6 +111,7 @@ test('a server that does not answer is started with --daemon, at most once a min
   await clock.advance(5_000)
   expect(seen.runs.length).toBe(1)
   expect(seen.runs[0]?.slice(-1)).toEqual(['--daemon'])
+  expect(seen.envs[0]).toEqual({ PORT: '4747' })
   expect(seen.status.at(-1)).toBe('suricata · off')
 
   await clock.advance(60_000)
@@ -119,9 +123,10 @@ test('a server that does not answer is started with --daemon, at most once a min
 })
 
 test('the pane lists the other sessions, asking first', async ($, on) => {
-  mock.clock(on)
+  const clock = mock.clock(on)
   engine(on, () => ({ ok: true, text: payload([session(OWN, 'waiting', 'Mine'), session('a', 'idle', 'Docs'), session('b', 'waiting', 'Orders list pagination')]) }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^1 asking/ }))?.text).toBe('1 asking · 1 waiting · 0 working')

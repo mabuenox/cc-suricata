@@ -55,12 +55,13 @@ async function start($: EngineInterface) {
   if (now - lastStartAt < START_EVERY_MS) return
   lastStartAt = now
   // `--daemon` makes the server detach itself and exit: a child of this call would die with the session.
-  await $.process.run(['node', `${$.plugin.root}/server.mjs`, '--daemon'], { timeoutMs: 15_000 }).catch(() => undefined)
+  await $.process.run(['node', `${$.plugin.root}/server.mjs`, '--daemon'], { env: { PORT: String(port) }, timeoutMs: 15_000 }).catch(() => undefined)
 }
 
 async function poll($: EngineInterface) {
   if (inFlight) return
   inFlight = true
+  ownId = await $.session.id() // read each time: a /clear changes it without a session.start
   try {
     const res = await $.http.fetch(`http://127.0.0.1:${port}/snapshot`).catch(() => null)
     if (!res?.ok) {
@@ -89,7 +90,6 @@ export const register: Register = (on, options) => {
   autostart = options.autostart !== false
 
   on('session.start', async ($, e, next) => {
-    ownId = await $.session.id()
     await $.command.register({ name: 'suricata', description: 'Your other Claude Code sessions: who is asking you, who is waiting, who is working' })
     void poll($)
     $.clock.every(POLL_MS, () => void poll($))
