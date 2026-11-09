@@ -35,7 +35,7 @@ const k = (n) => n == null ? '' : n >= 1000 ? `${Math.round(n / 1000)}k` : Strin
 const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h` }
 const sinceOf = (s) => s.status === 'closed' ? s.updatedAt : s.status === 'busy' ? s.lastPrompt?.at ?? s.statusSince : s.status === 'background' ? s.background[0]?.at ?? s.updatedAt : s.status === 'waiting' ? s.updatedAt : s.statusSince ?? s.updatedAt
 const modelOf = (s) => s.model?.split('-')[1] ?? ''
-const SRC = { 'claude-desktop': 'Desktop', 'claude-vscode': 'VS Code', 'sdk-py': 'SDK', 'sdk-ts': 'SDK' }
+const SRC = { cli: 'CLI', 'claude-desktop': 'Desktop', 'claude-vscode': 'VS Code', 'sdk-py': 'SDK', 'sdk-ts': 'SDK' }
 const src = (s) => SRC[s.entrypoint] ? `<span class="src">${SRC[s.entrypoint]}</span>` : ''
 const firstLine = (t) => (t ?? '').split('\n').find((l) => l.trim())?.replace(/[*`_#]/g, '') ?? ''
 // shortcut: the context window is not in the data; above 200k, 1M is assumed.
@@ -150,7 +150,7 @@ function render() {
   const pending = count(GROUPS[0]) + count(GROUPS[1])
   document.title = `${pending ? `(${pending}) ` : ''}Claude Code Suricata`
   document.getElementById('totals').innerHTML = GROUPS.slice(0, 3).map((g) => { const n = count(g); return `<span class="${n ? '' : 'zero'}"><b>${n}</b>${n === 1 ? g.one : g.many}</span>` }).join('')
-  const cols = '<div class="cols"><span></span><span>Session</span><span>Now</span><span>Model</span><span>Context</span><span class="r">Open</span><span class="r" title="Your prompts / model turns">Prompts</span><span class="r">Tokens</span><span class="r">Since</span></div>'
+  const cols = '<div class="cols"><span></span><span>Session<i class="grip" title="Drag to resize, double-click to reset"></i></span><span>Now</span><span>Model</span><span>Context</span><span class="r">Open</span><span class="r" title="Your prompts / model turns">Prompts</span><span class="r">Tokens</span><span class="r">Since</span></div>'
   document.getElementById('list').innerHTML = sorted.length
     ? cols + GROUPS.map((g) => { const rows = sorted.filter((s) => g.statuses.includes(s.status)); return rows.length ? `<h2 class="${CLASS[g.statuses[0]]}">${found && g.label === 'Recent' ? 'Closed' : g.label} <span>${rows.length}</span></h2>${rows.map(row).join('')}` : '' }).join('')
     : found ? '<div class="empty"><div><b>Nothing found</b>No prompt contains that text.</div></div>'
@@ -169,6 +169,29 @@ function render() {
 const list = document.getElementById('list')
 const select = (id, open) => { selectedId = id; if (open !== undefined) peekOpen = open; render(); list.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' }) }
 list.addEventListener('click', (e) => { const el = e.target.closest('.row'); if (el) select(el.dataset.id, true) })
+
+// The Session column is resizable: drag the grip in its header. The width lives in `--session` (a px value over the
+// stylesheet's default) and in localStorage; double-click forgets it. The header is re-rendered, so the listener sits on the list.
+const SESSION_COL = 'sessionCol'
+const setSessionCol = (px) => {
+  if (px) document.documentElement.style.setProperty('--session', `${px}px`)
+  else document.documentElement.style.removeProperty('--session')
+  try { px ? localStorage.setItem(SESSION_COL, px) : localStorage.removeItem(SESSION_COL) } catch {}
+}
+try { setSessionCol(Number(localStorage.getItem(SESSION_COL)) || 0) } catch {}
+list.addEventListener('dblclick', (e) => { if (e.target.matches('.grip')) setSessionCol(0) })
+list.addEventListener('pointerdown', (e) => {
+  if (!e.target.matches('.grip')) return
+  const cell = e.target.parentElement
+  const start = { x: e.clientX, width: cell.getBoundingClientRect().width }
+  const max = list.clientWidth - 420 // leaves room for Now and the fixed columns
+  const move = (ev) => setSessionCol(Math.round(Math.min(max, Math.max(160, start.width + ev.clientX - start.x))))
+  const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.body.classList.remove('resizing') }
+  document.addEventListener('pointermove', move)
+  document.addEventListener('pointerup', up)
+  document.body.classList.add('resizing')
+  e.preventDefault()
+})
 document.getElementById('insights').addEventListener('click', (e) => {
   const el = e.target.closest('[data-id]')
   if (el) { if (found) { q.value = ''; found = null } select(el.dataset.id, true) } // a finding points at a live session: leave the search

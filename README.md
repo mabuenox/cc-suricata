@@ -89,7 +89,7 @@ From those two sources it derives, per session:
 
 ### Technical decisions
 
-- **No hooks, no plugin, no configuration.** An earlier version was a Claude Code plugin ("mod"); it could only see its own session, and settings hooks would have to be installed in every machine. Watching the files Claude Code already writes needs nothing and sees every session, including Desktop and VS Code ones.
+- **The watch needs no hooks, no plugin, no configuration.** Watching the files Claude Code already writes sees every session, including Desktop and VS Code ones, from one process. The plugin ("In the terminal") is a client of that watch, not a second one: it only draws what the server has read, and it is optional.
 - **Transcripts are read backwards, in 512 KB chunks.** A transcript can be tens of MB; everything the list needs is in its last few records. The reader walks from the end and stops as soon as it has prompt, answer, title and turn end (or after ~1500 records), so a refresh costs milliseconds. The only full pass, the token tally, is done once and then kept incremental.
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
 - **No dependencies.** A handful of Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes, `insights.mjs` draws conclusions, `platform.mjs` knows the OS) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.

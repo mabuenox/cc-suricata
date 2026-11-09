@@ -4,7 +4,7 @@
   --text: #eeeffc; --muted: #8a8f98; --faint: #7e838e;
   --accent: #5e6ad2; --need: #f2994a; --done: #4cb782; --work: #f2c94c;
   --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
-  --cols: 16px minmax(220px, 0.7fr) minmax(220px, 1.3fr) 64px 118px 64px 72px 58px 60px; /* the title first: it is what tells sessions apart */
+  --cols: 16px var(--session, minmax(220px, 0.7fr)) minmax(220px, 1.3fr) 64px 118px 64px 72px 58px 60px; /* the title first: it is what tells sessions apart; `--session` is the width you dragged */
 }
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 ::selection { background: #5e6ad280; color: var(--text); }
@@ -55,6 +55,11 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .cols, .row { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 14px; padding: 0 20px; }
 .cols { position: sticky; top: 0; z-index: 1; height: 32px; font-size: 12px; color: var(--faint); background: var(--bg); border-bottom: 1px solid var(--border); }
 .cols .r, .row .r { text-align: right; }
+.cols > span { position: relative; }
+.cols .grip { position: absolute; top: 0; right: -11px; width: 8px; height: 100%; cursor: col-resize; }
+.cols .grip::after { content: ''; position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2px; border-radius: 1px; background: var(--border-strong); opacity: 0; transition: opacity 0.15s; }
+.cols .grip:hover::after, .resizing .cols .grip::after { opacity: 1; }
+.resizing { cursor: col-resize; user-select: none; }
 .list h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 20px; font-size: 13.5px; font-weight: 600; background: var(--raised); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
 .list h2.need { color: var(--need); } .list h2.done { color: var(--done); } .list h2.work { color: var(--work); } .list h2.off { color: var(--muted); }
 .list h2 span { color: var(--muted); font-weight: 500; margin-left: 2px; }
@@ -128,7 +133,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 @media (max-width: 1100px) {
   .layout.peek-open { grid-template-columns: 0 minmax(0, 1fr); }
   .layout.peek-open .list { display: none; }
-  :root { --cols: 16px minmax(160px, 1fr) minmax(140px, 1fr) 60px; }
+  :root { --cols: 16px var(--session, minmax(160px, 1fr)) minmax(140px, 1fr) 60px; }
   .cols > :nth-child(n+5), .row > :nth-child(n+5) { display: none; }
   header .totals, header .hint { display: none; }
 }
