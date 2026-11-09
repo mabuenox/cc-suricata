@@ -54,6 +54,19 @@ Answer `y` to add the marketplace, then pick a scope. From then on every session
 
 The plugin polls `/snapshot` on the cc-suricata server every 5 s and starts it (`--daemon`) when it is not running. `/config` has its two options: the port and whether to start the server.
 
+### Two ways to get it
+
+cc-suricata is distributed twice, from the same repository, and the two do not depend on each other:
+
+| | `npx cc-suricata` | `/plugin install cc-suricata --marketplace mabuenox/cc-suricata` |
+|---|---|---|
+| What you get | The server and the page: the files listed in `files` of `package.json`, published to npm on each release. | The whole repository as a Claude Code plugin: the terminal mod (`hooks/`, `types/`, `.claude-plugin/`) **and** the server and page beside it. |
+| What runs | `server.mjs`, started by you. | Only `hooks/register.tsx`, loaded by Claude Code in every session. It starts the server from its own copy (`node <plugin folder>/server.mjs --daemon`), so the page is at <http://localhost:4747> without `npx`. |
+| Updates | The next `npx` run. | `claude plugin update cc-suricata`, then `/reload-plugins`. |
+| Needs | Node 20+. | Node 20+ on the PATH (the mod runs `node`), Claude Code with plugins. |
+
+The plugin carries the server on purpose: the mod and the `/snapshot` it polls are then always the same version. The npm package carries nothing of the plugin: Claude Code does not install plugins from npm, and `npx cc-suricata` stays what it was. Both can be used on the same machine: whoever binds the port first serves the page, the other instance exits.
+
 ## How it works
 
 Claude Code already keeps everything the watcher needs on disk. The server never talks to your sessions; it just reads two places (the summary is the one exception: its own `claude -p`, see below):
