@@ -70,6 +70,7 @@ export function readTranscript(path, cwd = '') {
   for (const r of recordsFromEnd(path)) {
     seen.records++
     noteEditedFile(r, out, cwd)
+    for (const m of noticeText(r).matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) seen.notified.add(m[1])
     if (r.type === 'ai-title') out.title ??= r.aiTitle
     if (!out.branch && r.gitBranch && r.gitBranch !== 'HEAD') out.branch = r.gitBranch // "HEAD": not a repo, or detached
     if (r.isSidechain) continue
@@ -105,7 +106,13 @@ function noteUserRecord(r, out, seen) {
     const taskId = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
     if (taskId) seen.taskOf.set(c.tool_use_id, taskId)
   }
-  for (const m of text.matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) seen.notified.add(m[1])
+}
+
+// Where a background task's completion notice (<task-notification> with its task and tool-use ids) can be: as the text of a
+// user record (older transcripts), or as a `queue-operation` and the `attachment` that delivers it (since late 2026).
+function noticeText(r) {
+  const text = r.type === 'user' ? textOf(r.message?.content) : r.type === 'queue-operation' ? r.content : r.type === 'attachment' ? r.attachment?.prompt : ''
+  return typeof text === 'string' ? text : ''
 }
 
 function noteAssistantRecord(r, out, seen) {
