@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Claude Code Suricata: reads ~/.claude/sessions (live state) and ~/.claude/projects
 // (transcripts) and serves them on localhost over SSE.
-// No dependencies. `npx cc-suricata`, `--once` (prints the JSON and exits), `--no-open` (does not open the browser).
+// No dependencies. `npx cc-suricata --help` lists the flags (USAGE below is the one place they are described).
 import { readFileSync, readdirSync, watch, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, dirname } from 'node:path'
@@ -113,14 +113,35 @@ function search(text) {
   return [...live, ...recentSessions(hits, new Set(snapshot.sessions.map((s) => s.sessionId)), findTranscript, tmpdir(), 50)]
 }
 
-if (process.argv.includes('--once')) {
+const USAGE = `Usage: cc-suricata [flags]
+
+Serves your Claude Code sessions at http://localhost:${PORT} (PORT=<n> changes the port).
+
+  --notify    show an OS notification when a session asks you something or finishes (off by default)
+  --no-open   do not open the browser
+  --daemon    start the server detached and exit (what the terminal plugin uses; other flags are passed on)
+  --once      print the current snapshot ({ sessions, findings, recent }) as JSON and exit
+  --help      this text`
+const FLAGS = ['--notify', '--no-open', '--daemon', '--once', '--help']
+const flags = process.argv.slice(2)
+if (flags.includes('--help')) {
+  console.log(USAGE)
+  process.exit(0)
+}
+const unknown = flags.find((f) => !FLAGS.includes(f))
+if (unknown) {
+  console.error(`cc-suricata: unknown flag ${unknown}\n\n${USAGE}`)
+  process.exit(1)
+}
+const NOTIFY = flags.includes('--notify')
+if (flags.includes('--once')) {
   console.log(JSON.stringify(snap(), null, 2))
   process.exit(0)
 }
 // `--daemon`: start a server that outlives this process (the terminal mod uses it: its own children die with the session).
 // A second instance finds the port taken and dies on its own.
-if (process.argv.includes('--daemon')) {
-  spawn(process.execPath, [fileURLToPath(import.meta.url), '--no-open'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+if (flags.includes('--daemon')) {
+  spawn(process.execPath, [fileURLToPath(import.meta.url), '--no-open', ...flags.filter((f) => f !== '--daemon')], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
   process.exit(0)
 }
 
@@ -134,7 +155,7 @@ function refresh() {
   clearTimeout(timer)
   timer = setTimeout(() => {
     snapshot = snap()
-    notifyChanges(snapshot.sessions)
+    if (NOTIFY) notifyChanges(snapshot.sessions)
     const data = `data: ${JSON.stringify(snapshot)}\n\n`
     for (const res of clients) res.write(data)
   }, 300)

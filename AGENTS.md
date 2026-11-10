@@ -77,7 +77,7 @@ cc-suricata (`npx cc-suricata`): a local page that shows every Claude Code sessi
 
 ### Working here
 
-- `npm test` runs everything. `node server.mjs --once` prints the current snapshot (`{ sessions, findings, recent }`) as JSON; `node server.mjs --no-open` serves it on <http://localhost:4747>.
+- `npm test` runs everything. `node server.mjs --once` prints the current snapshot (`{ sessions, findings, recent }`) as JSON; `node server.mjs --no-open` serves it on <http://localhost:4747>. OS notifications are off unless `--notify` is given. `USAGE` in `server.mjs` is the one list of flags (`--help` prints it, an unknown flag is refused): a new flag goes there, in `FLAGS`, and in the README's Usage.
 - `claude --plugin-dir <path to this folder>` starts a session with the plugin, hot-reloaded on every save; `claude plugin validate .` and `claude plugin test .` check it without one.
 - `PORT=4748 node server.mjs --no-open` runs a second instance for testing a change without stopping the one in use.
 - `docker run --rm -v "$PWD:/app:ro" node:22 bash /app/scripts/linux-check.sh` (from Git Bash: prefix `MSYS_NO_PATHCONV=1`) runs the Linux check: unit tests, then the server against a fake `~/.claude` with fake `notify-send` and `code` on the PATH. Run it after touching `platform.mjs`, path handling, or the watchers.

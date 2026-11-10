@@ -16,12 +16,15 @@ It does not touch Claude Code's configuration: it reads `~/.claude/sessions/*.js
 npx cc-suricata
 ```
 
-Starts the server at <http://localhost:4747> and opens your browser. Options:
+Starts the server at <http://localhost:4747> and opens your browser. Flags (`npx cc-suricata --help` lists them):
 
-- `PORT=5000 npx cc-suricata` changes the port.
+- `--notify` shows an OS notification when a session asks you something or finishes (toast on Windows, `osascript` on macOS, `notify-send` on Linux). Off by default: the page and the terminal plugin already tell you.
 - `--no-open` does not open the browser.
+- `--daemon` starts the server detached and exits (what the terminal plugin uses); the other flags are passed on, so `npx cc-suricata --daemon --notify` leaves a notifying server behind.
 - `--once` prints `{ sessions, findings, recent }` as JSON and exits.
-- `--daemon` starts the server detached and exits (what the terminal mod uses).
+- `PORT=5000 npx cc-suricata` changes the port.
+
+An unknown flag prints the usage and exits with 1.
 
 Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to an edited file opens it in VS Code (`code` must be on the PATH).
 
@@ -94,7 +97,7 @@ From those two sources it derives, per session:
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
 - **No dependencies.** A handful of Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes, `insights.mjs` draws conclusions, `platform.mjs` knows the OS) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard) ; `/summary` and `/open` also refuse what a browser marks `Sec-Fetch-Site: cross-site`, so another open site cannot make it run `claude` or VS Code. `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
-- **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
+- **Notifications are a side effect of state changes**, not a separate channel: with `--notify`, when a session's derived state moves to *waiting* or *idle*, the server runs the platform's notifier (`notify.ps1`, WinRT toast + sound, on Windows). Nothing fires while a session keeps working, and nothing fires at all without the flag: the page and the terminal plugin are the default way of being told.
 - **The summary is a `claude -p` with everything switched off.** `--no-session-persistence --tools "" --settings '{"disableAllHooks":true}' --strict-mcp-config --disable-slash-commands`, prompt over stdin, run from the temp folder: no transcript, no registry file, no history line, so the watcher has nothing to react to (a plain `claude -p` would write all three and take 30 s with plugin hooks; this one takes under 10). It uses your own account and `haiku`; the prompt carries only the findings and one line per live session. Not `--bare`: that only accepts an API key, not a login.
 - **Developed on Windows.** macOS and Linux have their own notifier and VS Code lookup, tested only by unit tests; see "Platforms" below.
 
