@@ -133,6 +133,13 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .tl .pause { background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); }
 .tlsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .tlsum .work { color: var(--work); } .tlsum .wait { color: var(--done); } .tlsum .compact { color: #8b93f0; }
 .stats { font-size: 13px; margin-top: 6px; } .stats b { color: var(--text); font-weight: 600; } .stats.dim, .stats .dim { color: var(--muted); font-size: 12.5px; } .stats .add { color: var(--done); } .stats .del { color: var(--need); }
+.peek h3 .count { color: var(--faint); font-weight: 400; margin-left: 6px; }
+.turns { list-style: none; margin: 4px 0 0 4px; padding: 0 0 0 16px; border-left: 2px solid var(--border-strong); }
+.turns li { position: relative; padding: 3px 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.turns li::before { content: ''; position: absolute; left: -21px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+.turns li:last-child::before { background: var(--accent); } .turns li:last-child span { color: var(--text); font-weight: 500; }
+.turns em { display: block; font-style: normal; font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }
+.turns time { color: var(--faint); font-size: 12px; margin-right: 8px; } .turns span { color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; } .chips span { font: 12px var(--mono); color: var(--muted); background: var(--raised); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
 .copy { float: right; margin-left: 10px; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted); font: 12px Inter; padding: 2px 8px; cursor: pointer; }
 .copy:hover { color: var(--text); } .copy:focus-visible { outline: 2px solid var(--accent); }

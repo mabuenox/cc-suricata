@@ -46,7 +46,7 @@ function readSessions() {
     if (!isOwnSession(s, tmpdir()) || !isAlive(s.pid)) continue
     const path = findTranscript(s.sessionId)
     const t = path ? readTranscript(path, s.cwd) : emptyTranscript() // a session has no transcript during its first seconds
-    list.push({ ...derive(s, t, path ? tally(path) : undefined), branch: gitBranch(s.cwd) })
+    list.push({ ...derive(s, t, path ? tally(path) : undefined), branch: gitBranch(s.cwd), phases: readHistory(HISTORY).get(s.sessionId)?.phases ?? [] })
   }
   return list.sort((a, b) => b.updatedAt - a.updatedAt)
 }
@@ -212,9 +212,9 @@ createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(found))
     return
   }
-  // What the terminal mod polls: the live sessions without their timeline events, the findings and the cached summary (never generated here).
+  // What the terminal mod polls: the live sessions without their timeline events and phases, the findings and the cached summary (never generated here).
   if (req.url === '/snapshot') {
-    const sessions = snapshot.sessions.map(({ events, ...s }) => s)
+    const sessions = snapshot.sessions.map(({ events, phases, ...s }) => s)
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ sessions, findings: snapshot.findings, summary: { text: summary.text, at: summary.at } }))
     return
   }

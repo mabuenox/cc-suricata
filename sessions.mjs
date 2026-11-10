@@ -34,7 +34,7 @@ export function readHistory(path) {
     return cached.bySession // no history yet: nothing closed to show
   }
   if (size === cached.size) return cached.bySession
-  const bySession = new Map() // sessionId -> { project, prompts, firstAt, lastAt }
+  const bySession = new Map() // sessionId -> { project, prompts, phases, firstAt, lastAt }
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     let r
     try {
@@ -42,8 +42,9 @@ export function readHistory(path) {
     } catch {
       continue
     }
-    const h = bySession.get(r.sessionId) ?? { project: r.project, prompts: [], firstAt: r.timestamp, lastAt: r.timestamp }
+    const h = bySession.get(r.sessionId) ?? { project: r.project, prompts: [], phases: [], firstAt: r.timestamp, lastAt: r.timestamp }
     h.prompts.push(r.display)
+    h.phases.push({ at: r.timestamp, text: String(r.display ?? '').split('\n')[0].slice(0, 120) }) // one phase per prompt, titled by its first line
     h.lastAt = r.timestamp
     bySession.set(r.sessionId, h)
   }
@@ -89,7 +90,7 @@ export function recentSessions(history, liveIds, transcriptOf, tmp, limit = 20) 
     if (!closedCache.has(id)) { const path = transcriptOf(id); closedCache.set(id, path ? readTranscript(path, h.project) : null) }
     const t = closedCache.get(id)
     if (!t?.lastAnswer) continue // empty sessions (just a /clear, a /resume…) add nothing
-    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.prompts[0].split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.prompts.length, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: t.branch && t.branch + worktreeMark(h.project), match: h.match })
+    out.push({ ...t, sessionId: id, cwd: h.project, name: t.title ?? h.prompts[0].split('\n')[0].slice(0, 80), startedAt: h.firstAt, updatedAt: h.lastAt, prompts: t.prompts ?? h.prompts.length, status: 'closed', background: [], agents: 0, currentTool: null, waitingQuestion: null, branch: t.branch && t.branch + worktreeMark(h.project), phases: h.phases, match: h.match })
     if (out.length === limit) break
   }
   return out

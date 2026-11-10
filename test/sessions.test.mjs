@@ -44,7 +44,10 @@ test('gitBranch: an unreadable HEAD is reported and still shows nothing', () => 
 test('readHistory: one entry per session with its prompts and time span', () => {
   const h = readHistory(join(fixtures, 'history.jsonl'))
   assert.equal(h.size, 4)
-  assert.deepEqual(h.get('hist-live'), { project: 'C:\\Workspace\\acme-shop', prompts: ['Add pagination to the list', 'And sort by date'], firstAt: 1767261600000, lastAt: 1767261900000 })
+  assert.deepEqual(h.get('hist-live'), {
+    project: 'C:\\Workspace\\acme-shop', prompts: ['Add pagination to the list', 'And sort by date'], firstAt: 1767261600000, lastAt: 1767261900000,
+    phases: [{ at: 1767261600000, text: 'Add pagination to the list' }, { at: 1767261900000, text: 'And sort by date' }], // one phase per prompt, for the panel
+  })
   assert.equal(readHistory(join(fixtures, 'history.jsonl')), h) // unchanged file: same object
   assert.equal(readHistory(join(fixtures, 'missing.jsonl')).size, 0)
 })
@@ -84,6 +87,7 @@ test('recentSessions: closed sessions from the history, newest first, skipping l
   assert.deepEqual([s.startedAt, s.updatedAt], [1767262200000, 1767262200000])
   assert.equal(s.lastAnswer.text, 'Done: pages of 20.')
   assert.equal(s.branch, 'feat/pagination') // from the transcript: the folder may be on another branch by now, or gone
+  assert.deepEqual(s.phases.map((t) => t.text), ['Rename the reports module'])
 })
 
 test('openTarget: only a file the watcher listed for that session, and only if it exists', () => {

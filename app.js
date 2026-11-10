@@ -118,6 +118,18 @@ const row = (s) => `
 
 const usd = (n) => (n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n)}`)
 const costSection = (c) => `<section><h3>Cost so far</h3><div class="stats"><b>${usd(c.usd)}</b> · API ${dur(c.apiMs)} · tools ${dur(c.toolMs)} · <span class="add">+${c.linesAdded}</span> <span class="del">−${c.linesRemoved}</span> lines</div>${c.models.length > 1 ? `<div class="stats dim">${c.models.map((m) => `${esc(modelOf(m))} ${usd(m.usd)}`).join(' · ')}</div>` : ''}</section>`
+// One phase per prompt, in order, titled by the prompt's first line (what history.jsonl keeps); the date only when it changes.
+const phasesSection = (phases) => {
+  if (!phases.length) return ''
+  let day = ''
+  const items = phases.map((t) => {
+    const d = new Date(t.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+    const date = d === day ? '' : `<em>${d}</em>`
+    day = d
+    return `<li>${date}<time>${time(t.at)}</time><span>${esc(t.text)}</span></li>`
+  })
+  return `<section><h3>Turns <span class="count">${phases.length}</span></h3><ol class="turns">${items.join('')}</ol></section>`
+}
 const toolsSection = (tools) => `<section><h3>Tools used</h3><div class="chips">${tools.map((t) => `<span>${esc(t.replace(/^mcp__(.+?)__/, '$1 · '))}</span>`).join('')}</div></section>`
 
 const peek = (s, d = detailsOf(s)) => `
@@ -128,6 +140,7 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
   ${awayText(s) ? `<section><h3>Where you left it</h3><div class="away">${esc(awayText(s))}</div></section>` : ''}
   <section><h3>Timeline</h3>${timeline(d.events, s, d.turnDurations)}</section>
   ${d.cost ? costSection(d.cost) : ''}
+  ${phasesSection(s.phases ?? [])}
   ${s.background.length ? `<section><h3>In background</h3>${s.background.map((b) => b.tool === 'Agent' ? `<div class="cmd">Agent: ${esc(b.label)}</div>` : `<pre class="cmd"><code class="language-bash">${esc(b.label)}</code></pre>`).join('')}</section>` : ''}
   <section><h3>Last answer</h3><div class="md">${s.lastAnswer ? md(s.lastAnswer.text) : '<span class="prompt">No answer yet</span>'}</div></section>
   <section><h3>Your last prompt</h3><div class="prompt">${esc(s.lastPrompt?.text ?? '')}</div></section>
