@@ -54,6 +54,23 @@ test('a workflow is a background task named after its script, until its task not
   assert.equal(derive(registry(), t).status, 'background')
 })
 
+test('readTranscript: your own title beats the automatic one; the PR and the away summary are the latest', () => {
+  const t = readTranscript(fx('meta'))
+  assert.equal(t.title, 'cc-suricata')
+  assert.deepEqual(t.pr, { number: 6, url: 'https://github.com/mabuenox/cc-suricata/pull/6', repo: 'mabuenox/cc-suricata' })
+  assert.deepEqual(t.away, { text: 'You were opening PR #6 for the terminal mod; next step: ask for a review.', at: '2026-11-10T09:16:00.000Z' })
+})
+
+test('tally: compactions in the timeline, measured turn durations, and the last cost and tools totals', () => {
+  const r = tally(fx('meta'))
+  assert.deepEqual(r.events.map(([, k]) => k), ['p', 'e', 'c', 'p', 'e'])
+  assert.deepEqual(r.turnDurations.map(([, ms]) => ms), [180000, 60000])
+  assert.deepEqual(r.tools, ['Skill', 'Bash', 'Edit', 'Write'])
+  assert.deepEqual(r.cost, { usd: 2.25, apiMs: 200000, toolMs: 45000, linesAdded: 25, linesRemoved: 3, models: [{ model: 'claude-fable-5-1', usd: 2.15, outputTokens: 1500 }, { model: 'claude-haiku-5-5', usd: 0.1, outputTokens: 50 }] })
+  const s = derive(registry({ startedAt: ms('2026-11-10T09:05:00Z') }), readTranscript(fx('meta')), r)
+  assert.deepEqual([s.cost.usd, s.tools.length, s.turnDurations.length, s.events.length], [2.25, 4, 1, 3]) // totals are the file's; events and durations, this process's
+})
+
 test('a registry wait (permission prompt, plan approval…) is "waiting" with its reason', () => {
   const t = readTranscript(fx('bg-notified')) // no pending question in the transcript
   const s = derive(registry({ status: 'waiting', waitingFor: 'approve Bash: npm test' }), t)

@@ -193,12 +193,13 @@ createServer((req, res) => {
     })
     return
   }
-  // Timeline of a closed session: its transcript is read in full only when you open it.
+  // Timeline, turn durations, cost and tools of a closed session: its transcript is read in full only when you open it.
   if (req.url.startsWith('/timeline?id=')) {
     const id = req.url.slice(13)
     try {
       if (![...snapshot.recent, ...found].some((x) => x.sessionId === id)) throw new Error('not listed')
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tally(findTranscript(id)).events))
+      const { events, turnDurations, cost, tools } = tally(findTranscript(id))
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ events, turnDurations, cost, tools }))
     } catch {
       forgetClosed(id) // the transcript is gone (Claude Code cleanup): out of the list on the next refresh
       res.writeHead(404).end()

@@ -31,8 +31,8 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 ## What it shows
 
 - Groups: *Need you* (a session is asking you a question), *Waiting for you* (turn finished) and *Working* (running, or with background tasks).
-- Per session: title (what it is about, the one Claude Code gives it from the first prompt), name and git branch, what it is doing now, model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
-- Panel: last answer rendered as markdown, last prompt, background commands, edited files, and a timeline of the session (working vs. waiting for you, per turn).
+- Per session: title (the one you gave with `/rename`, else the one Claude Code gives it from the first prompt), name, git branch and pull request, what it is doing now (for a session you left: the summary Claude Code wrote when you went away), model and permission mode, context usage, time open, prompts and turns, generated tokens and time in the current state.
+- Panel: where you left it, a timeline of the session (working vs. waiting for you, per turn, with each context compaction marked and the model time Claude Code measured per turn), cost so far (dollars, API and tool time, lines added and removed, split per model), last answer rendered as markdown, last prompt, background commands, edited files, tools used, folder and pull request.
 - *Recent*: the last 20 closed sessions, with a copyable `claude --resume` command to pick one up again.
 - Search (`/`): type a few words and the list becomes the sessions, open or closed, where one of your prompts contains them, with that prompt in the *Now* column. The whole history is searched, not only the recent sessions.
 - Next: a strip above the list with the one thing to do first (a session asking you something, however fresh, else the longest wait over 15 min, else a context above 85 %, else a background task older than 30 min). It opens its session. Sessions are named by their title (what they are about), not by the registry name.
@@ -75,7 +75,7 @@ The plugin carries the server on purpose: the mod and the `/snapshot` it polls a
 Claude Code already keeps everything the watcher needs on disk. The server never talks to your sessions; it just reads two places (the summary is the one exception: its own `claude -p`, see below):
 
 1. **`~/.claude/sessions/<pid>.json`**: one file per live session, written by Claude Code itself. It carries the session id, name, working directory, `entrypoint` (`cli`, `claude-desktop`, `claude-vscode`, `sdk-*`), `startedAt` and a `status` (`busy`, `idle`, plus transient values such as `shell`). A file whose `pid` is no longer alive is ignored.
-2. **`~/.claude/projects/<project>/<sessionId>.jsonl`**: the transcript, appended live. Each line is a JSON record: your prompts (`type: user` with `origin.kind: human`), the model's messages (`type: assistant`, with `usage` and `stop_reason`), tool calls and their results, `file-history-delta` records for every edit, and `ai-title`.
+2. **`~/.claude/projects/<project>/<sessionId>.jsonl`**: the transcript, appended live. Each line is a JSON record: your prompts (`type: user` with `origin.kind: human`), the model's messages (`type: assistant`, with `usage` and `stop_reason`), tool calls and their results, `file-history-delta` records for every edit, `ai-title` and `custom-title`, `pr-link`, `tools-used` and `cost-state` (running totals, written now and then), and `system` records with a `subtype`: `turn_duration`, `compact_boundary`, `away_summary`.
 
 From those two sources it derives, per session:
 

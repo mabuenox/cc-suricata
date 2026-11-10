@@ -22,6 +22,8 @@ header .totals .zero { opacity: .5; }
 header .search { margin-left: 24px; width: 220px; padding: 4px 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--raised); border: 1px solid var(--border-strong); border-radius: 6px; outline: none; }
 header .search:focus { border-color: var(--accent); }
 header .search::placeholder { color: var(--faint); }
+.away { font-style: italic; } .peek .away { color: var(--text); border-left: 2px solid var(--accent); padding-left: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pr { color: #8b93f0; text-decoration: none; } .pr:hover { text-decoration: underline; }
 .doing .match { color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 8px; }
 header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--faint); }
 header .hint kbd { font: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px; margin: 0 1px; color: var(--muted); }
@@ -127,8 +129,11 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 /* Timeline: working (yellow) / waiting for you (green); a long pause is drawn shortened and dotted */
 .tl { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border); }
 .tl .work { background: var(--work); } .tl .wait { background: var(--done); }
+.tl .compact { flex: 0 0 3px; background: var(--accent); }
 .tl .pause { background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); }
-.tlsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .tlsum .work { color: var(--work); } .tlsum .wait { color: var(--done); }
+.tlsum { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .tlsum .work { color: var(--work); } .tlsum .wait { color: var(--done); } .tlsum .compact { color: #8b93f0; }
+.stats { font-size: 13px; margin-top: 6px; } .stats b { color: var(--text); font-weight: 600; } .stats.dim, .stats .dim { color: var(--muted); font-size: 12.5px; } .stats .add { color: var(--done); } .stats .del { color: var(--need); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; } .chips span { font: 12px var(--mono); color: var(--muted); background: var(--raised); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
 .copy { float: right; margin-left: 10px; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted); font: 12px Inter; padding: 2px 8px; cursor: pointer; }
 .copy:hover { color: var(--text); } .copy:focus-visible { outline: 2px solid var(--accent); }
 

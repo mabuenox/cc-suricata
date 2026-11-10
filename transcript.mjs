@@ -53,6 +53,8 @@ export const emptyTranscript = () => ({
   agentsAt: [], // timestamps of foreground Agents without a result
   pendingAt: null, // timestamp of the tool in progress
   branch: '', // the git branch of the last record: what a closed session was on, whatever the folder is on now
+  pr: null, // { number, url, repo } of the pull request the session opened (pr-link record)
+  away: null, // { text, at }: the summary Claude Code writes a few minutes after a turn ends while you are away
 })
 
 // Walks the transcript backwards and extracts what the row and the panel show. Because it walks backwards,
@@ -60,6 +62,7 @@ export const emptyTranscript = () => ({
 export function readTranscript(path, cwd = '') {
   if (!path) throw new TypeError('readTranscript: path is required')
   const out = emptyTranscript()
+  let customTitle = null // the name you gave with /rename: it beats the automatic one, but the early exit below waits for either
   const seen = {
     resolved: new Set(), // tool_use ids with a result
     notified: new Set(), // tool_use ids and task ids of background tasks whose completion arrived, or stopped with TaskStop
@@ -72,13 +75,17 @@ export function readTranscript(path, cwd = '') {
     noteEditedFile(r, out, cwd)
     for (const m of noticeText(r).matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>|<agent-message from="([^"]+)"/g)) seen.notified.add(m[1] ?? m[2])
     if (r.type === 'ai-title') out.title ??= r.aiTitle
+    if (r.type === 'custom-title' && r.customTitle) customTitle ??= r.customTitle
+    if (r.type === 'pr-link' && r.prUrl) out.pr ??= { number: r.prNumber, url: r.prUrl, repo: r.prRepository }
+    if (r.type === 'system' && r.subtype === 'away_summary' && r.content) out.away ??= { text: clip(r.content.replace(/\s*\(disable recaps in \/config\)\s*$/, '')), at: r.timestamp } // the trailer is Claude Code's own hint
     if (!out.branch && r.gitBranch && r.gitBranch !== 'HEAD') out.branch = r.gitBranch // "HEAD": not a repo, or detached
     if (r.isSidechain) continue
     if (r.type === 'user') noteUserRecord(r, out, seen)
     if (r.type === 'assistant' && Array.isArray(r.message?.content)) noteAssistantRecord(r, out, seen)
     // The essentials are in the last lines; edited files may be further back, but reading the whole transcript is not worth it.
-    if (out.lastPrompt && out.lastAnswer && out.title && out.lastTurnEndedAt && (out.editedFiles.length >= MAX_FILES || seen.records > MAX_RECORDS)) break
+    if (out.lastPrompt && out.lastAnswer && (out.title || customTitle) && out.lastTurnEndedAt && (out.editedFiles.length >= MAX_FILES || seen.records > MAX_RECORDS)) break
   }
+  out.title = customTitle ?? out.title
   return out
 }
 
@@ -164,13 +171,17 @@ function noteToolUse(c, at, out, seen) {
   else out.currentTool = c.name
 }
 
-// Pass over the whole transcript, incremental (only what has grown since last time): generated tokens
-// and timeline events, your prompts ('p') and turn ends ('e'), with their instant in ms.
-const tallies = new Map() // path -> { offset, total, events, rest }
+// Pass over the whole transcript, incremental (only what has grown since last time): generated tokens,
+// timeline events (your prompts 'p', turn ends 'e', compactions 'c', with their instant in ms), the measured
+// duration of each turn, and the running totals Claude Code writes now and then (cost, tools used), which can
+// sit anywhere in the file and so are not for the tail reader.
+const MARKS = ['"output_tokens"', '"kind":"human"', '"stop_reason":"end_turn"', '"compact_boundary"', '"turn_duration"', '"type":"cost-state"', '"type":"tools-used"']
+const freshTally = () => ({ offset: 0, total: 0, events: [], turnDurations: [], cost: null, tools: [], rest: '' })
+const tallies = new Map() // path -> freshTally()
 export function tally(path) {
-  const t = tallies.get(path) ?? { offset: 0, total: 0, events: [], rest: '' }
+  const t = tallies.get(path) ?? freshTally()
   const size = statSync(path).size
-  if (size < t.offset) Object.assign(t, { offset: 0, total: 0, events: [], rest: '' }) // file rewritten
+  if (size < t.offset) Object.assign(t, freshTally()) // file rewritten
   if (size > t.offset) {
     const buf = Buffer.alloc(size - t.offset)
     const fd = openSync(path, 'r')
@@ -182,14 +193,18 @@ export function tally(path) {
     const lines = (t.rest + buf.toString('utf8')).split('\n')
     t.rest = lines.pop() // last line, maybe incomplete
     for (const line of lines) {
-      if (!line.includes('"output_tokens"') && !line.includes('"kind":"human"') && !line.includes('"stop_reason":"end_turn"')) continue
+      if (!MARKS.some((m) => line.includes(m))) continue
       try {
         const r = JSON.parse(line)
         t.total += r.message?.usage?.output_tokens ?? 0
+        if (r.type === 'cost-state') t.cost = costOf(r) // a running total: the last one is the one
+        if (r.type === 'tools-used' && Array.isArray(r.tools)) t.tools = r.tools // cumulative too
         if (r.isSidechain) continue
         // shortcut: a turn that ends in AskUserQuestion is not an end_turn; that wait is drawn as work. Revisit if the transcript marks that stop.
         if (r.type === 'user' && r.origin?.kind === 'human') t.events.push([Date.parse(r.timestamp), 'p'])
         else if (r.type === 'assistant' && r.message?.stop_reason === 'end_turn') t.events.push([Date.parse(r.timestamp), 'e'])
+        else if (r.type === 'system' && r.subtype === 'compact_boundary') t.events.push([Date.parse(r.timestamp), 'c'])
+        else if (r.type === 'system' && r.subtype === 'turn_duration' && r.durationMs >= 0) t.turnDurations.push([Date.parse(r.timestamp), r.durationMs])
       } catch {}
     }
     t.offset = size
@@ -198,8 +213,15 @@ export function tally(path) {
   return t
 }
 
+// What a cost-state record says so far: dollars, time on the API and in tools, lines, and the split per model.
+const costOf = (r) => ({
+  usd: r.totalCostUSD ?? 0, apiMs: r.totalAPIDuration ?? 0, toolMs: r.totalToolDuration ?? 0,
+  linesAdded: r.totalLinesAdded ?? 0, linesRemoved: r.totalLinesRemoved ?? 0,
+  models: Object.entries(r.modelUsage ?? {}).map(([model, m]) => ({ model, usd: m.costUSD ?? 0, outputTokens: m.outputTokens ?? 0 })).sort((a, b) => b.usd - a.usd),
+})
+
 // State of a live session: the registry (~/.claude/sessions/<pid>.json) plus what was read from the transcript.
-export function derive(s, t, { total = 0, events = [] } = {}) {
+export function derive(s, t, { total = 0, events = [], turnDurations = [], cost = null, tools = [] } = {}) {
   // A background task is a child of the Claude Code process: if it was launched before the current process started (resumed session), it died with the previous one.
   const alive = (at) => new Date(at).getTime() >= s.startedAt
   const background = t.background.filter((b) => alive(b.at))
@@ -211,8 +233,9 @@ export function derive(s, t, { total = 0, events = [] } = {}) {
   const status = waitingQuestion ? 'waiting' : s.status === 'busy' ? 'busy' : background.length ? 'background' : s.status === 'idle' ? 'idle' : 'busy'
   return {
     ...s, ...t, background, agents, currentTool: pending.currentTool, waitingQuestion,
-    outputTokens: total,
+    outputTokens: total, cost, tools,
     events: events.filter(([at]) => at >= s.startedAt).slice(-400), // events before the current process are not part of this timeline
+    turnDurations: turnDurations.filter(([at]) => at >= s.startedAt).slice(-400),
     status, rawStatus: s.status ?? null, statusSince: pending.waitingQuestion ? null : s.statusUpdatedAt,
   }
 }

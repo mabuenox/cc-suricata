@@ -46,29 +46,38 @@ const gauge = (ctx) => {
 }
 const time = (ms) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 const PAUSE = 3600e3 // a wait longer than an hour is a pause: not counted as waiting, drawn shortened
-const timeline = (ev, s) => {
+const timeline = (ev, s, turnDurations = []) => {
   if (!ev) return '<span class="prompt">Loading…</span>'
   const segs = []
   let open = null
   const close = (to) => { if (open && to > open.from) segs.push({ ...open, to, d: to - open.from }); open = null }
-  for (const [at, kind] of ev) { close(at); open = { kind: kind === 'p' ? 'work' : 'wait', from: at } }
+  for (const [at, kind] of ev) {
+    if (kind === 'c') { const was = open?.kind; close(at); segs.push({ kind: 'compact', from: at, d: 0 }); if (was) open = { kind: was, from: at }; continue } // a compaction is a mark, not a segment
+    close(at)
+    open = { kind: kind === 'p' ? 'work' : 'wait', from: at }
+  }
   if (s.status !== 'closed') close(Date.now())
   if (!segs.length) return '<span class="prompt">No turns yet</span>'
   let work = 0, wait = 0, pauses = 0
   for (const g of segs) { if (g.kind === 'work') work += g.d; else if (g.d > PAUSE) pauses++; else wait += g.d }
-  const bar = segs.map((g) => { const pause = g.kind === 'wait' && g.d > PAUSE; return `<i class="${g.kind}${pause ? ' pause' : ''}" style="flex:${pause ? PAUSE / 4 : g.d}" title="${pause ? 'Pause' : g.kind === 'work' ? 'Working' : 'Waiting for you'} ${dur(g.d)} · from ${time(g.from)}"></i>` }).join('')
+  const bar = segs.map((g) => { if (g.kind === 'compact') return `<i class="compact" title="Context compacted · ${time(g.from)}"></i>`; const pause = g.kind === 'wait' && g.d > PAUSE; return `<i class="${g.kind}${pause ? ' pause' : ''}" style="flex:${pause ? PAUSE / 4 : g.d}" title="${pause ? 'Pause' : g.kind === 'work' ? 'Working' : 'Waiting for you'} ${dur(g.d)} · from ${time(g.from)}"></i>` }).join('')
   const pct = Math.round((work / (work + wait || 1)) * 100)
-  return `<div class="tl">${bar}</div><div class="tlsum">${segs.filter((g) => g.kind === 'work').length} turns · <b class="work">working ${dur(work)}</b> (${pct} %) · <b class="wait">waiting for you ${dur(wait)}</b>${pauses ? ` · ${pauses} ${pauses === 1 ? 'pause' : 'pauses'}` : ''}</div>`
+  const compactions = segs.filter((g) => g.kind === 'compact').length
+  const measured = turnDurations.map(([, ms]) => ms) // what Claude Code timed per turn, where the bar above is wall-clock between records
+  return `<div class="tl">${bar}</div><div class="tlsum">${segs.filter((g) => g.kind === 'work').length} turns · <b class="work">working ${dur(work)}</b> (${pct} %) · <b class="wait">waiting for you ${dur(wait)}</b>${pauses ? ` · ${pauses} ${pauses === 1 ? 'pause' : 'pauses'}` : ''}${compactions ? ` · <b class="compact">${compactions} ${compactions === 1 ? 'compaction' : 'compactions'}</b>` : ''}${measured.length ? `<br>Model time ${dur(measured.reduce((a, b) => a + b, 0))} over ${measured.length} timed turns · longest ${dur(Math.max(...measured))}` : ''}</div>`
 }
-const closedEvents = new Map() // sessionId -> events of a closed session, fetched when opened
-const eventsOf = (s) => {
-  if (s.status !== 'closed') return s.events
-  if (!closedEvents.has(s.sessionId)) {
-    closedEvents.set(s.sessionId, null)
-    fetch(`/timeline?id=${s.sessionId}`).then((r) => r.json()).then((ev) => { closedEvents.set(s.sessionId, ev); render() })
+const NO_DETAILS = { events: null, turnDurations: [], cost: null, tools: [] } // while /timeline is on its way
+const closedDetails = new Map() // sessionId -> { events, turnDurations, cost, tools } of a closed session, fetched when opened
+const detailsOf = (s) => {
+  if (s.status !== 'closed') return s
+  if (!closedDetails.has(s.sessionId)) {
+    closedDetails.set(s.sessionId, null)
+    fetch(`/timeline?id=${s.sessionId}`).then((r) => r.json()).then((d) => { closedDetails.set(s.sessionId, d); render() })
   }
-  return closedEvents.get(s.sessionId)
+  return closedDetails.get(s.sessionId) ?? NO_DETAILS
 }
+// The summary Claude Code writes a few minutes after a turn ends while you are away: what the session is at, better than the last answer's first line.
+const awayText = (s) => (s.away && (!s.lastAnswer || s.away.at > s.lastAnswer.at) ? s.away.text : null)
 const pill = (s) => `<span class="pill ${CLASS[s.status]}">${ICON[s.status]}${WORD[s.status]}</span>`
 // "Now" column: question, tool in progress, background tasks and agents, or the first line of the last answer.
 const doing = (s) => {
@@ -79,8 +88,10 @@ const doing = (s) => {
   if (s.status === 'waiting') return esc(s.waitingQuestion)
   if (s.status === 'background') return `${extras.join('')}${esc(s.background[0].label)}`
   if (s.status === 'busy') return `${s.currentTool ? `<code>${esc(s.currentTool)}</code>` : ''}${extras.join('')}${esc(firstLine(s.lastAnswer?.text)) || (s.currentTool ? '' : 'Thinking')}`
-  return `${extras.join('')}${esc(firstLine(s.lastAnswer?.text))}`
+  return `${extras.join('')}${awayText(s) ? `<span class="away">${esc(firstLine(awayText(s)))}</span>` : esc(firstLine(s.lastAnswer?.text))}`
 }
+
+const prLink = (s) => (s.pr?.url.startsWith('https://') ? `<a class="pr" href="${esc(s.pr.url)}" target="_blank" rel="noopener" title="${esc(s.pr.repo ?? '')}">#${esc(String(s.pr.number))}</a>` : '')
 
 let sessions = []
 let findings = [] // facts worth a look, most urgent first, each pointing at a session
@@ -95,7 +106,7 @@ const subject = (s) => s.title ?? s.name ?? s.cwd
 const row = (s) => `
   <div class="row ${CLASS[s.status]}${s.sessionId === selectedId ? ' selected' : ''}" role="option" aria-selected="${s.sessionId === selectedId}" tabindex="0" data-id="${s.sessionId}" title="${esc(s.cwd)}">
     ${ICON[s.status]}
-    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${s.title && s.name !== s.title ? `${esc(s.name)} · ` : ''}${place(s)}</span></span>
+    <span class="who"><span class="name">${esc(subject(s))}${src(s)}</span><span class="branch">${s.title && s.name !== s.title ? `${esc(s.name)} · ` : ''}${place(s)}${s.pr ? ` · ${prLink(s)}` : ''}</span></span>
     <span class="doing">${doing(s)}</span>
     <span class="run"><b>${esc(modelOf(s))}</b>${esc(s.permissionMode ?? '')}</span>
     ${gauge(s.contextTokens)}
@@ -105,17 +116,24 @@ const row = (s) => `
     <span class="num r"><b>${dur(Date.now() - new Date(sinceOf(s)))}</b></span>
   </div>`
 
-const peek = (s) => `
+const usd = (n) => (n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n)}`)
+const costSection = (c) => `<section><h3>Cost so far</h3><div class="stats"><b>${usd(c.usd)}</b> · API ${dur(c.apiMs)} · tools ${dur(c.toolMs)} · <span class="add">+${c.linesAdded}</span> <span class="del">−${c.linesRemoved}</span> lines</div>${c.models.length > 1 ? `<div class="stats dim">${c.models.map((m) => `${esc(modelOf(m))} ${usd(m.usd)}`).join(' · ')}</div>` : ''}</section>`
+const toolsSection = (tools) => `<section><h3>Tools used</h3><div class="chips">${tools.map((t) => `<span>${esc(t.replace(/^mcp__(.+?)__/, '$1 · '))}</span>`).join('')}</div></section>`
+
+const peek = (s, d = detailsOf(s)) => `
   <div class="head">${pill(s)}<h1>${esc(subject(s))}</h1><button class="close" id="close" title="Close (Esc)" aria-label="Close">×</button></div>
   ${s.waitingQuestion ? `<section><div class="question">${esc(s.waitingQuestion)}</div></section>` : ''}
   ${s.status === 'closed' ? `<section><h3>Resume<button class="copy" id="copy">copy</button></h3><pre class="cmd"><code class="language-bash">cd "${esc(s.cwd)}"
 claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
-  <section><h3>Timeline</h3>${timeline(eventsOf(s), s)}</section>
+  ${awayText(s) ? `<section><h3>Where you left it</h3><div class="away">${esc(awayText(s))}</div></section>` : ''}
+  <section><h3>Timeline</h3>${timeline(d.events, s, d.turnDurations)}</section>
+  ${d.cost ? costSection(d.cost) : ''}
   ${s.background.length ? `<section><h3>In background</h3>${s.background.map((b) => b.tool === 'Agent' ? `<div class="cmd">Agent: ${esc(b.label)}</div>` : `<pre class="cmd"><code class="language-bash">${esc(b.label)}</code></pre>`).join('')}</section>` : ''}
   <section><h3>Last answer</h3><div class="md">${s.lastAnswer ? md(s.lastAnswer.text) : '<span class="prompt">No answer yet</span>'}</div></section>
   <section><h3>Your last prompt</h3><div class="prompt">${esc(s.lastPrompt?.text ?? '')}</div></section>
   ${s.editedFiles.length ? `<section><h3>Edited files</h3><ul class="files">${s.editedFiles.map((f) => `<li><a href="#" data-file="${esc(f)}" title="Open in VS Code">${esc(f)}<span>open</span></a></li>`).join('')}</ul></section>` : ''}
-  <section><h3>Folder</h3><span class="path">${esc(s.cwd)}</span></section>`
+  ${d.tools.length ? toolsSection(d.tools) : ''}
+  <section><h3>Folder</h3><span class="path">${esc(s.cwd)}</span>${s.pr ? `<div class="stats">Pull request ${prLink(s)} <span class="dim">${esc(s.pr.url)}</span></div>` : ''}</section>`
 
 // Session titles and names in the summary become links to the row: the text answers "which one" by itself.
 const linkNames = (text) => {
@@ -231,7 +249,7 @@ q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; f
 
 const live = document.getElementById('live')
 const es = new EventSource('/events')
-es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; findings = d.findings ?? []; for (const s of d.sessions) closedEvents.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render(); search(); requestSummary() }
+es.onmessage = (e) => { const d = JSON.parse(e.data); sessions = [...d.sessions, ...d.recent]; findings = d.findings ?? []; for (const s of d.sessions) closedDetails.delete(s.sessionId); live.textContent = 'live'; live.classList.remove('off'); render(); search(); requestSummary() }
 es.onerror = () => { live.textContent = 'offline'; live.classList.add('off') }
 const tick = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); if (sessions.length) render() }
 setInterval(tick, 30000)
