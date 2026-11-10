@@ -198,8 +198,8 @@ createServer((req, res) => {
     const id = req.url.slice(13)
     try {
       if (![...snapshot.recent, ...found].some((x) => x.sessionId === id)) throw new Error('not listed')
-      const { events, turnDurations, cost, tools } = tally(findTranscript(id))
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ events, turnDurations, cost, tools }))
+      const { events, turnDurations, answers, cost, tools } = tally(findTranscript(id))
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ events, turnDurations, answers, cost, tools }))
     } catch {
       forgetClosed(id) // the transcript is gone (Claude Code cleanup): out of the list on the next refresh
       res.writeHead(404).end()
@@ -214,7 +214,7 @@ createServer((req, res) => {
   }
   // What the terminal mod polls: the live sessions without their timeline events and phases, the findings and the cached summary (never generated here).
   if (req.url === '/snapshot') {
-    const sessions = snapshot.sessions.map(({ events, phases, ...s }) => s)
+    const sessions = snapshot.sessions.map(({ events, phases, answers, ...s }) => s)
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ sessions, findings: snapshot.findings, summary: { text: summary.text, at: summary.at } }))
     return
   }

@@ -66,7 +66,7 @@ const timeline = (ev, s, turnDurations = []) => {
   const measured = turnDurations.map(([, ms]) => ms) // what Claude Code timed per turn, where the bar above is wall-clock between records
   return `<div class="tl">${bar}</div><div class="tlsum">${segs.filter((g) => g.kind === 'work').length} turns · <b class="work">working ${dur(work)}</b> (${pct} %) · <b class="wait">waiting for you ${dur(wait)}</b>${pauses ? ` · ${pauses} ${pauses === 1 ? 'pause' : 'pauses'}` : ''}${compactions ? ` · <b class="compact">${compactions} ${compactions === 1 ? 'compaction' : 'compactions'}</b>` : ''}${measured.length ? `<br>Model time ${dur(measured.reduce((a, b) => a + b, 0))} over ${measured.length} timed turns · longest ${dur(Math.max(...measured))}` : ''}</div>`
 }
-const NO_DETAILS = { events: null, turnDurations: [], cost: null, tools: [] } // while /timeline is on its way
+const NO_DETAILS = { events: null, turnDurations: [], answers: [], cost: null, tools: [] } // while /timeline is on its way
 const closedDetails = new Map() // sessionId -> { events, turnDurations, cost, tools } of a closed session, fetched when opened
 const detailsOf = (s) => {
   if (s.status !== 'closed') return s
@@ -118,15 +118,17 @@ const row = (s) => `
 
 const usd = (n) => (n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n)}`)
 const costSection = (c) => `<section><h3>Cost so far</h3><div class="stats"><b>${usd(c.usd)}</b> · API ${dur(c.apiMs)} · tools ${dur(c.toolMs)} · <span class="add">+${c.linesAdded}</span> <span class="del">−${c.linesRemoved}</span> lines</div>${c.models.length > 1 ? `<div class="stats dim">${c.models.map((m) => `${esc(modelOf(m))} ${usd(m.usd)}`).join(' · ')}</div>` : ''}</section>`
-// One phase per prompt, in order, titled by the prompt's first line (what history.jsonl keeps); the date only when it changes.
-const phasesSection = (phases) => {
+// One phase per prompt (its first line, from history.jsonl) and one per answer that ended a turn (its first line, from the transcript),
+// in time order; the date only when it changes.
+const phasesSection = (phases, answers = []) => {
   if (!phases.length) return ''
+  const all = [...phases.map((t) => ({ ...t, who: 'you' })), ...answers.map(([at, text]) => ({ at, text, who: 'claude' }))].sort((a, b) => a.at - b.at)
   let day = ''
-  const items = phases.map((t) => {
+  const items = all.map((t) => {
     const d = new Date(t.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
     const date = d === day ? '' : `<em>${d}</em>`
     day = d
-    return `<li>${date}<time>${time(t.at)}</time><span>${esc(t.text)}</span></li>`
+    return `<li class="${t.who}">${date}<time>${time(t.at)}</time><span>${esc(t.text)}</span></li>`
   })
   return `<section><h3>Turns <span class="count">${phases.length}</span></h3><ol class="turns">${items.join('')}</ol></section>`
 }
@@ -140,7 +142,7 @@ claude --resume ${esc(s.sessionId)}</code></pre></section>` : ''}
   ${awayText(s) ? `<section><h3>Where you left it</h3><div class="away">${esc(awayText(s))}</div></section>` : ''}
   <section><h3>Timeline</h3>${timeline(d.events, s, d.turnDurations)}</section>
   ${d.cost ? costSection(d.cost) : ''}
-  ${phasesSection(s.phases ?? [])}
+  ${phasesSection(s.phases ?? [], d.answers)}
   ${s.background.length ? `<section><h3>In background</h3>${s.background.map((b) => b.tool === 'Agent' ? `<div class="cmd">Agent: ${esc(b.label)}</div>` : `<pre class="cmd"><code class="language-bash">${esc(b.label)}</code></pre>`).join('')}</section>` : ''}
   <section><h3>Last answer</h3><div class="md">${s.lastAnswer ? md(s.lastAnswer.text) : '<span class="prompt">No answer yet</span>'}</div></section>
   <section><h3>Your last prompt</h3><div class="prompt">${esc(s.lastPrompt?.text ?? '')}</div></section>

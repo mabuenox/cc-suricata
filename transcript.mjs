@@ -176,7 +176,7 @@ function noteToolUse(c, at, out, seen) {
 // duration of each turn, and the running totals Claude Code writes now and then (cost, tools used), which can
 // sit anywhere in the file and so are not for the tail reader.
 const MARKS = ['"output_tokens"', '"kind":"human"', '"stop_reason":"end_turn"', '"compact_boundary"', '"turn_duration"', '"type":"cost-state"', '"type":"tools-used"']
-const freshTally = () => ({ offset: 0, total: 0, events: [], turnDurations: [], cost: null, tools: [], rest: '' })
+const freshTally = () => ({ offset: 0, total: 0, events: [], turnDurations: [], answers: [], cost: null, tools: [], rest: '' })
 const tallies = new Map() // path -> freshTally()
 export function tally(path) {
   const t = tallies.get(path) ?? freshTally()
@@ -202,7 +202,11 @@ export function tally(path) {
         if (r.isSidechain) continue
         // shortcut: a turn that ends in AskUserQuestion is not an end_turn; that wait is drawn as work. Revisit if the transcript marks that stop.
         if (r.type === 'user' && r.origin?.kind === 'human') t.events.push([Date.parse(r.timestamp), 'p'])
-        else if (r.type === 'assistant' && r.message?.stop_reason === 'end_turn') t.events.push([Date.parse(r.timestamp), 'e'])
+        else if (r.type === 'assistant' && r.message?.stop_reason === 'end_turn') {
+          t.events.push([Date.parse(r.timestamp), 'e'])
+          const line = textOf(r.message.content).split('\n').find((l) => l.trim()) // how each turn ended, for the list of phases
+          if (line) t.answers.push([Date.parse(r.timestamp), line.trim().slice(0, 120)])
+        }
         else if (r.type === 'system' && r.subtype === 'compact_boundary') t.events.push([Date.parse(r.timestamp), 'c'])
         else if (r.type === 'system' && r.subtype === 'turn_duration' && r.durationMs >= 0) t.turnDurations.push([Date.parse(r.timestamp), r.durationMs])
       } catch {}
@@ -221,7 +225,7 @@ const costOf = (r) => ({
 })
 
 // State of a live session: the registry (~/.claude/sessions/<pid>.json) plus what was read from the transcript.
-export function derive(s, t, { total = 0, events = [], turnDurations = [], cost = null, tools = [] } = {}) {
+export function derive(s, t, { total = 0, events = [], turnDurations = [], answers = [], cost = null, tools = [] } = {}) {
   // A background task is a child of the Claude Code process: if it was launched before the current process started (resumed session), it died with the previous one.
   const alive = (at) => new Date(at).getTime() >= s.startedAt
   const background = t.background.filter((b) => alive(b.at))
@@ -236,6 +240,7 @@ export function derive(s, t, { total = 0, events = [], turnDurations = [], cost 
     outputTokens: total, cost, tools,
     events: events.filter(([at]) => at >= s.startedAt).slice(-400), // events before the current process are not part of this timeline
     turnDurations: turnDurations.filter(([at]) => at >= s.startedAt).slice(-400),
+    answers: answers.filter(([at]) => at >= s.startedAt).slice(-400),
     status, rawStatus: s.status ?? null, statusSince: pending.waitingQuestion ? null : s.statusUpdatedAt,
   }
 }
