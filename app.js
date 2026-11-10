@@ -195,7 +195,10 @@ function render() {
   const aside = document.getElementById('peek')
   aside.hidden = !open
   if (open) {
+    const keep = aside.dataset.id === s.sessionId ? aside.scrollTop : 0 // a refresh redraws the same panel: where you were, not the top
     aside.innerHTML = peek(s)
+    aside.dataset.id = s.sessionId
+    aside.scrollTop = keep
     if (window.hljs) aside.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el))
   }
 }
