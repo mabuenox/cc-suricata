@@ -1,7 +1,7 @@
 {
   "name": "cc-suricata",
   "version": "0.1.0",
-  "description": "Your other Claude Code sessions in the terminal: the next thing to do above the prompt, a toast when one asks you, and a /suricata pane",
+  "description": "Your Claude Code sessions in the terminal: the next thing to do in another one above the prompt, a toast when one asks you, and a /suricata pane with all of them",
   "types": "./types/index.d.ts",
   "userConfig": {
     "port": {

@@ -122,15 +122,16 @@ test('a server that does not answer is started with --daemon, at most once a min
   await ui.unmount()
 })
 
-test('the pane lists the other sessions, asking first', async ($, on) => {
+test('the pane lists every session, asking first, this one marked', async ($, on) => {
   const clock = mock.clock(on)
   engine(on, () => ({ ok: true, text: payload([session(OWN, 'waiting', 'Mine'), session('a', 'idle', 'Docs'), session('b', 'waiting', 'Orders list pagination')]) }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await clock.settle()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^1 asking/ }))?.text).toBe('1 asking · 1 waiting · 0 working')
-  expect(await ui.find({ type: 'Text', text: /Mine/ })).toBe(undefined)
+  expect((await ui.find({ type: 'Text', text: /^2 asking/ }))?.text).toBe('2 asking · 1 waiting · 0 working')
+  expect((await ui.find({ type: 'Text', text: /Mine/ }))?.text).toBe('Mine')
+  expect((await ui.find({ type: 'Text', text: /here/ }))?.text).toBe('◂ here')
   expect((await ui.find({ type: 'Text', text: /^Orders/ }))?.text).toBe('Orders list pagination')
   await ui.unmount()
 })

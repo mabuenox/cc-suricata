@@ -48,12 +48,12 @@ The same watch, inside Claude Code, as a plugin:
 /plugin install cc-suricata --marketplace mabuenox/cc-suricata
 ```
 
-Answer `y` to add the marketplace, then pick a scope. From then on every session shows what matters about your *other* sessions (the one you are typing in is left out):
+Answer `y` to add the marketplace, then pick a scope. From then on every session shows the whole picture, with the band and the toasts about your *other* sessions, where your attention is needed:
 
-- A line above the prompt with the next thing to do, when there is one (`s` opens the pane).
-- The counts in the status line: asking, waiting, working.
+- A line above the prompt with the next thing to do in another session, when there is one (`s` opens the pane).
+- The counts of all your sessions in the status line: asking, waiting, working.
 - A toast when another session starts asking you something.
-- `/suricata` opens a pane with the list (title, branch, time in that state, asking first) and the suricata's sentence if the page has asked for one. It is drawn from 110 columns.
+- `/suricata` opens a pane with every session (title, branch, time in that state, asking first, the one you are in marked) and the suricata's sentence if the page has asked for one. It is drawn from 110 columns.
 
 The plugin polls `/snapshot` on the cc-suricata server every 5 s and starts it (`--daemon`) when it is not running. `/config` has its two options: the port and whether to start the server.
 

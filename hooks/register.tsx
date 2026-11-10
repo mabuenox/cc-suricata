@@ -1,6 +1,5 @@
-// The terminal side of cc-suricata: polls the server's `/snapshot` and shows what matters about your OTHER sessions
-// (this one is left out: you are looking at it). A band above the prompt with the next thing to do, the counts in the
-// status line, a toast when another session starts asking you, and a `/suricata` pane with the list.
+// The terminal side of cc-suricata: polls the server's `/snapshot`. The pane and the status line show every session, this
+// one marked; the band above the prompt and the toasts are about the OTHER sessions only, where your attention is needed.
 import { atom, read, update } from 'claude-code'
 import type { Register, EngineInterface } from 'claude-code'
 
@@ -71,9 +70,10 @@ async function poll($: EngineInterface) {
       return
     }
     const data = JSON.parse(res.text) as { sessions: Session[]; findings: Finding[]; summary: { text: string | null; at: number } }
-    const sessions = others(data.sessions, ownId)
-    for (const s of newlyAsking(lastStatus, sessions)) $.ui.toast(`${subject(s)} is asking you`, { timeoutMs: 8_000 })
-    lastStatus = new Map(sessions.map((s) => [s.sessionId, s.status]))
+    const { sessions } = data
+    const rest = others(sessions, ownId)
+    for (const s of newlyAsking(lastStatus, rest)) $.ui.toast(`${subject(s)} is asking you`, { timeoutMs: 8_000 })
+    lastStatus = new Map(rest.map((s) => [s.sessionId, s.status]))
     await update($, snapshot, () => ({ down: false, sessions, findings: data.findings, summary: data.summary }))
     $.ui.status(sessions.length ? statusLine(counts(sessions)) : undefined)
   } finally {
@@ -90,7 +90,7 @@ export const register: Register = (on, options) => {
   autostart = options.autostart !== false
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'suricata', description: 'Your other Claude Code sessions: who is asking you, who is waiting, who is working' })
+    await $.command.register({ name: 'suricata', description: 'Your Claude Code sessions: who is asking you, who is waiting, who is working' })
     void poll($)
     $.clock.every(POLL_MS, () => void poll($))
 
@@ -123,7 +123,7 @@ export const register: Register = (on, options) => {
     const snap = await read($, snapshot)
     if (snap === null) return <Text dimColor>Looking at your sessions…</Text>
     if (snap.down) return <Text dimColor>The cc-suricata server is not running{autostart ? ', starting it' : ''}.</Text>
-    if (snap.sessions.length === 0) return <Text dimColor>No other session open.</Text>
+    if (snap.sessions.length === 0) return <Text dimColor>No session open.</Text>
     const now = await $.clock.now()
     const nextAction = pickNext(snap.findings, ownId)
 
@@ -139,6 +139,7 @@ export const register: Register = (on, options) => {
               <Box key={s.sessionId} gap={1}>
                 <Text color={GLYPH[s.status].color}>{GLYPH[s.status].glyph}</Text>
                 <Text bold wrap="truncate-end">{subject(s)}</Text>
+                {s.sessionId === ownId && <Text color="warning">◂ here</Text>}
                 <Text dimColor wrap="truncate-end">{[branchOf(s), since === null ? '' : ago(now - since)].filter(Boolean).join(' · ')}</Text>
               </Box>
             )
