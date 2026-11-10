@@ -240,7 +240,7 @@ export function derive(s, t, { total = 0, events = [], turnDurations = [], answe
     outputTokens: total, cost, tools,
     events: events.filter(([at]) => at >= s.startedAt).slice(-400), // events before the current process are not part of this timeline
     turnDurations: turnDurations.filter(([at]) => at >= s.startedAt).slice(-400),
-    answers: answers.filter(([at]) => at >= s.startedAt).slice(-400),
+    answers, // the whole file, like the prompts they sit between: the list of turns spans the session's life, not this process's
     status, rawStatus: s.status ?? null, statusSince: pending.waitingQuestion ? null : s.statusUpdatedAt,
   }
 }

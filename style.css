@@ -137,7 +137,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .turns { list-style: none; margin: 4px 0 0 4px; padding: 0 0 0 16px; border-left: 2px solid var(--border-strong); }
 .turns li { position: relative; padding: 3px 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .turns li i { position: absolute; left: -25px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; background: var(--side); color: var(--muted); } /* over the line: the icon says who */
-.turns li i svg { width: 12px; height: 12px; } .turns li.claude i svg { width: 16px; height: 10px; }
+.turns li i svg { width: 12px; height: 12px; }
 .turns li i { top: 6px; } .turns li:has(em) i { top: 29px; }
 .turns li.claude span { color: var(--faint); font-style: italic; }
 .turns li:last-child i { color: var(--accent); } .turns li:last-child span { color: var(--text); font-weight: 500; font-style: normal; }
