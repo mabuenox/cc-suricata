@@ -120,6 +120,7 @@ const usd = (n) => (n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n)}`)
 const costSection = (c) => `<section><h3>Cost so far</h3><div class="stats"><b>${usd(c.usd)}</b> · API ${dur(c.apiMs)} · tools ${dur(c.toolMs)} · <span class="add">+${c.linesAdded}</span> <span class="del">−${c.linesRemoved}</span> lines</div>${c.models.length > 1 ? `<div class="stats dim">${c.models.map((m) => `${esc(modelOf(m))} ${usd(m.usd)}`).join(' · ')}</div>` : ''}</section>`
 // One phase per prompt (its first line, from history.jsonl) and one per answer that ended a turn (its first line, from the transcript),
 // in time order; the date only when it changes.
+const PERSON = '<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.6" fill="currentColor"/><path d="M2 13c0-3 2.2-4.6 5-4.6s5 1.6 5 4.6z" fill="currentColor"/></svg>'
 const phasesSection = (phases, answers = []) => {
   if (!phases.length) return ''
   const all = [...phases.map((t) => ({ ...t, who: 'you' })), ...answers.map(([at, text]) => ({ at, text, who: 'claude' }))].sort((a, b) => a.at - b.at)
@@ -128,7 +129,7 @@ const phasesSection = (phases, answers = []) => {
     const d = new Date(t.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
     const date = d === day ? '' : `<em>${d}</em>`
     day = d
-    return `<li class="${t.who}">${date}<time>${time(t.at)}</time><span>${esc(t.text)}</span></li>`
+    return `<li class="${t.who}">${date}<i title="${t.who === 'you' ? 'You' : 'Claude'}">${t.who === 'you' ? PERSON : HEAD}</i><time>${time(t.at)}</time><span>${esc(t.text)}</span></li>`
   })
   return `<section><h3>Turns <span class="count">${phases.length}</span></h3><ol class="turns">${items.join('')}</ol></section>`
 }
