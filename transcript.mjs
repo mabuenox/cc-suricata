@@ -70,7 +70,7 @@ export function readTranscript(path, cwd = '') {
   for (const r of recordsFromEnd(path)) {
     seen.records++
     noteEditedFile(r, out, cwd)
-    for (const m of noticeText(r).matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>/g)) seen.notified.add(m[1])
+    for (const m of noticeText(r).matchAll(/<(?:tool-use-id|task-id)>([^<]+)<\/(?:tool-use-id|task-id)>|<agent-message from="([^"]+)"/g)) seen.notified.add(m[1] ?? m[2])
     if (r.type === 'ai-title') out.title ??= r.aiTitle
     if (!out.branch && r.gitBranch && r.gitBranch !== 'HEAD') out.branch = r.gitBranch // "HEAD": not a repo, or detached
     if (r.isSidechain) continue
@@ -89,6 +89,14 @@ function noteEditedFile(r, out, cwd) {
   if (!out.editedFiles.includes(p)) out.editedFiles.push(p)
 }
 
+// How a tool result says the work went on without it, and the id its completion notice will carry:
+// a Bash with run_in_background, a Workflow (always in the background), an Agent (asynchronous since late 2026).
+const LAUNCHED = [
+  /running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i,
+  /launched in background\. Task ID: ([\w-]+)/,
+  /Async agent launched successfully[\s\S]*?agentId: ([\w-]+)/,
+]
+
 function noteUserRecord(r, out, seen) {
   const content = r.message?.content
   const text = textOf(content)
@@ -103,7 +111,7 @@ function noteUserRecord(r, out, seen) {
     if (c.type !== 'tool_result') continue
     seen.resolved.add(c.tool_use_id)
     const body = typeof c.content === 'string' ? c.content : Array.isArray(c.content) ? c.content.map((x) => x.text ?? '').join('\n') : ''
-    const taskId = body.match(/running in (?:the )?background(?: with ID| as)[: ]+@?([\w-]+)/i)?.[1]
+    const taskId = LAUNCHED.map((re) => body.match(re)?.[1]).find(Boolean)
     if (taskId) seen.taskOf.set(c.tool_use_id, taskId)
   }
 }
@@ -128,15 +136,23 @@ function noteAssistantRecord(r, out, seen) {
   }
 }
 
+// What the row shows for a background task: the command, the agent's description, the workflow's name (from its script's meta).
+function labelOf(c) {
+  if (c.name === 'Agent') return c.input.description ?? ''
+  if (c.name === 'Workflow') return c.input.name ?? c.input.script?.match(/name:\s*['"]([^'"]+)/)?.[1] ?? 'workflow'
+  return c.input.command ?? c.input.description ?? ''
+}
+
 function noteToolUse(c, at, out, seen) {
   if (c.name === 'TaskStop') {
     const id = c.input?.task_id ?? c.input?.shell_id
     if (id) seen.notified.add(id) // adding undefined would match every task without a known id
   }
-  if (c.input?.run_in_background === true) {
+  // Work that goes on without the turn: asked for (run_in_background), or how Agent and Workflow answer anyway ("launched",
+  // see LAUNCHED). Alive until its completion notice or hand-back names it.
+  if (c.input?.run_in_background === true || (['Agent', 'Workflow'].includes(c.name) && seen.taskOf.has(c.id))) {
     if (seen.notified.has(c.id) || seen.notified.has(seen.taskOf.get(c.id))) return
-    const label = c.name === 'Agent' ? c.input.description ?? '' : c.input.command ?? c.input.description ?? ''
-    out.background.push({ tool: c.name, label: clip(String(label)).split('\n')[0], at })
+    out.background.push({ tool: c.name, label: clip(labelOf(c)).split('\n')[0], at })
     return
   }
   if (seen.resolved.has(c.id)) return

@@ -41,6 +41,19 @@ test('background task whose completion notice came as a queue-operation and an a
   assert.equal(derive(registry(), t).status, 'idle')
 })
 
+test('asynchronous agents: launched at once, alive until their hand-back arrives', () => {
+  const t = readTranscript(fx('agent-async'))
+  assert.deepEqual(t.background.map((b) => [b.tool, b.label]), [['Agent', 'Explore mod API']]) // the server one handed back
+  const s = derive(registry(), t)
+  assert.deepEqual([s.status, s.agents], ['background', 1])
+})
+
+test('a workflow is a background task named after its script, until its task notification', () => {
+  const t = readTranscript(fx('workflow-bg'))
+  assert.deepEqual(t.background.map((b) => [b.tool, b.label]), [['Workflow', 'qa-stories']]) // guard-check completed
+  assert.equal(derive(registry(), t).status, 'background')
+})
+
 test('a registry wait (permission prompt, plan approval…) is "waiting" with its reason', () => {
   const t = readTranscript(fx('bg-notified')) // no pending question in the transcript
   const s = derive(registry({ status: 'waiting', waitingFor: 'approve Bash: npm test' }), t)
