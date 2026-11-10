@@ -16,11 +16,15 @@ It does not touch Claude Code's configuration: it reads `~/.claude/sessions/*.js
 npx cc-suricata
 ```
 
-Starts the server at <http://localhost:4747> and opens your browser. Options:
+Starts the server at <http://localhost:4747> and opens your browser. Flags (`npx cc-suricata --help` lists them):
 
-- `PORT=5000 npx cc-suricata` changes the port.
+- `--notify` shows an OS notification when a session asks you something or finishes (toast on Windows, `osascript` on macOS, `notify-send` on Linux). Off by default: the page and the terminal plugin already tell you.
 - `--no-open` does not open the browser.
+- `--daemon` starts the server detached and exits (what the terminal plugin uses); the other flags are passed on, so `npx cc-suricata --daemon --notify` leaves a notifying server behind.
 - `--once` prints `{ sessions, findings, recent }` as JSON and exits.
+- `PORT=5000 npx cc-suricata` changes the port.
+
+An unknown flag prints the usage and exits with 1.
 
 Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to an edited file opens it in VS Code (`code` must be on the PATH).
 
@@ -35,6 +39,36 @@ Keyboard: `↑` `↓` move, `↵` open the panel, `esc` close it. "open" next to
 - The suricata: one or two sentences written by `claude -p`, shown as the mascot speaking, on what the list does not show by itself (a pattern across sessions, something that does not add up, what to do first and why), never a rephrase of the rows; "Nothing unusual." when there is nothing. Session names are clickable. It is regenerated when a session or a finding comes or goes, at most every two minutes, and only while the page is visible: a minimised tab spends no tokens. Its two lines are reserved, so the list does not jump when it arrives. "again" forces a new one. Needs `claude` on the PATH; without it the strip shows only the findings.
 
 <p align="center"><img src="docs/timeline.png" width="460" alt="Panel of a session: timeline strip with working and waiting segments, 5 turns, 1.2 h working, 1.1 h waiting, 1 pause; last answer, last prompt and edited files"></p>
+
+## In the terminal
+
+The same watch, inside Claude Code, as a plugin:
+
+```
+/plugin install cc-suricata --marketplace mabuenox/cc-suricata
+```
+
+Answer `y` to add the marketplace, then pick a scope. From then on every session shows what matters about your *other* sessions (the one you are typing in is left out):
+
+- A line above the prompt with the next thing to do, when there is one (`s` opens the pane).
+- The counts in the status line: asking, waiting, working.
+- A toast when another session starts asking you something.
+- `/suricata` opens a pane with the list (title, branch, time in that state, asking first) and the suricata's sentence if the page has asked for one. It is drawn from 110 columns.
+
+The plugin polls `/snapshot` on the cc-suricata server every 5 s and starts it (`--daemon`) when it is not running. `/config` has its two options: the port and whether to start the server.
+
+### Two ways to get it
+
+cc-suricata is distributed twice, from the same repository, and the two do not depend on each other:
+
+| | `npx cc-suricata` | `/plugin install cc-suricata --marketplace mabuenox/cc-suricata` |
+|---|---|---|
+| What you get | The server and the page: the files listed in `files` of `package.json`, published to npm on each release. | The whole repository as a Claude Code plugin: the terminal mod (`hooks/`, `types/`, `.claude-plugin/`) **and** the server and page beside it. |
+| What runs | `server.mjs`, started by you. | Only `hooks/register.tsx`, loaded by Claude Code in every session. It starts the server from its own copy (`node <plugin folder>/server.mjs --daemon`), so the page is at <http://localhost:4747> without `npx`. |
+| Updates | The next `npx` run. | `claude plugin update cc-suricata`, then `/reload-plugins`. |
+| Needs | Node 20+. | Node 20+ on the PATH (the mod runs `node`), Claude Code with plugins. |
+
+The plugin carries the server on purpose: the mod and the `/snapshot` it polls are then always the same version. The npm package carries nothing of the plugin: Claude Code does not install plugins from npm, and `npx cc-suricata` stays what it was. Both can be used on the same machine: whoever binds the port first serves the page, the other instance exits.
 
 ## How it works
 
@@ -58,12 +92,12 @@ From those two sources it derives, per session:
 
 ### Technical decisions
 
-- **No hooks, no plugin, no configuration.** An earlier version was a Claude Code plugin ("mod"); it could only see its own session, and settings hooks would have to be installed in every machine. Watching the files Claude Code already writes needs nothing and sees every session, including Desktop and VS Code ones.
+- **The watch needs no hooks, no plugin, no configuration.** Watching the files Claude Code already writes sees every session, including Desktop and VS Code ones, from one process. The plugin ("In the terminal") is a client of that watch, not a second one: it only draws what the server has read, and it is optional.
 - **Transcripts are read backwards, in 512 KB chunks.** A transcript can be tens of MB; everything the list needs is in its last few records. The reader walks from the end and stops as soon as it has prompt, answer, title and turn end (or after ~1500 records), so a refresh costs milliseconds. The only full pass, the token tally, is done once and then kept incremental.
 - **Push, not polling.** `fs.watch` on both folders (recursive on `projects`) triggers a debounced refresh that is broadcast to the page over Server-Sent Events; a 15 s timer covers anything the watcher misses and keeps the "since" column current.
 - **No dependencies.** A handful of Node files (`server.mjs` serves, `transcript.mjs` parses, `sessions.mjs` indexes, `insights.mjs` draws conclusions, `platform.mjs` knows the OS) with `node:http`, `node:fs` and `node:child_process`; the page loads `marked`, `DOMPurify` and `highlight.js` from a CDN with Subresource Integrity, and degrades to plain text without network.
 - **Local only, by construction.** The server binds `127.0.0.1` and rejects any request whose `Host` is not `localhost`/`127.0.0.1` (DNS-rebinding guard) ; `/summary` and `/open` also refuse what a browser marks `Sec-Fetch-Site: cross-site`, so another open site cannot make it run `claude` or VS Code. `/open` only accepts files the server itself listed for that session, checks they exist, and spawns `Code.exe` without a shell. The `gitdir:` of a worktree is resolved and rejected if it points to a UNC path, so a crafted `.git` file cannot trigger an SMB request.
-- **Notifications are a side effect of state changes**, not a separate channel: when a session's derived state moves to *waiting* or *idle*, the server runs `notify.ps1` (WinRT toast + sound). Nothing fires while a session keeps working.
+- **Notifications are a side effect of state changes**, not a separate channel: with `--notify`, when a session's derived state moves to *waiting* or *idle*, the server runs the platform's notifier (`notify.ps1`, WinRT toast + sound, on Windows). Nothing fires while a session keeps working, and nothing fires at all without the flag: the page and the terminal plugin are the default way of being told.
 - **The summary is a `claude -p` with everything switched off.** `--no-session-persistence --tools "" --settings '{"disableAllHooks":true}' --strict-mcp-config --disable-slash-commands`, prompt over stdin, run from the temp folder: no transcript, no registry file, no history line, so the watcher has nothing to react to (a plain `claude -p` would write all three and take 30 s with plugin hooks; this one takes under 10). It uses your own account and `haiku`; the prompt carries only the findings and one line per live session. Not `--bare`: that only accepts an API key, not a login.
 - **Developed on Windows.** macOS and Linux have their own notifier and VS Code lookup, tested only by unit tests; see "Platforms" below.
 
@@ -92,13 +126,13 @@ cd cc-suricata
 node server.mjs
 ```
 
-No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, prompt search, git branch and open check (tested), `insights.mjs` the findings and the summary prompt and argv (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification.
+No dependencies. `server.mjs` is the server (SSE at `/events`), `transcript.mjs` the transcript reader and state derivation (pure, tested), `sessions.mjs` the live registry, closed-session index, prompt search, git branch and open check (tested), `insights.mjs` the findings and the summary prompt and argv (pure, tested), `index.html` + `style.css` + `app.js` the page, `notify.ps1` the notification. `hooks/register.tsx` is the Claude Code plugin (band, status line, toasts, `/suricata` pane; `types/index.d.ts` its state contract), with `.claude-plugin/` making the repository a plugin marketplace; `claude --plugin-dir .` loads it in a session while you edit it.
 
 ```
 npm test
 ```
 
-The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point (a pending question, background tasks finished, stopped or still running, a resumed session, a subagent), and the session index, git branch reading and the `/open` check on fixtures and temp folders. They run in CI on every pull request and before each publish.
+The tests in `test/` run the parser on small anonymised transcripts in `test/fixtures/`, one per case that broke at some point (a pending question, background tasks finished, stopped or still running, a resumed session, a subagent), and the session index, git branch reading and the `/open` check on fixtures and temp folders. They run in CI on every pull request and before each publish. `claude plugin test .` runs the plugin's tests (`hooks/register.test.tsx`) and `claude plugin validate .` checks it the way the engine will.
 
 ### Releases
 

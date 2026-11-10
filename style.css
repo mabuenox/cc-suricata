@@ -4,7 +4,7 @@
   --text: #eeeffc; --muted: #8a8f98; --faint: #7e838e;
   --accent: #5e6ad2; --need: #f2994a; --done: #4cb782; --work: #f2c94c;
   --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
-  --cols: 16px minmax(220px, 0.7fr) minmax(220px, 1.3fr) 64px 118px 64px 72px 58px 60px; /* the title first: it is what tells sessions apart */
+  --cols: 16px var(--session, minmax(220px, 0.7fr)) minmax(220px, 1.3fr) 64px 118px 64px 72px 58px 60px; /* the title first: it is what tells sessions apart; `--session` is the width you dragged */
 }
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 ::selection { background: #5e6ad280; color: var(--text); }
@@ -38,10 +38,12 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .insights a { color: inherit; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; cursor: pointer; border-radius: 3px; }
 .insights a:hover { color: #8b93f0; text-decoration: underline dotted; }
 .insights a:focus-visible, .insights button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.insights p { display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 0; min-height: 3.6em; } /* the suricata speaking: its head, then a speech bubble */
-.insights p svg { width: 34px; height: 21px; flex: none; margin-top: 6px; }
-.insights p > span { position: relative; flex: 1; padding: 5px 10px; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 8px; }
-.insights p > span::before { content: ''; position: absolute; left: -6px; top: 10px; width: 9px; height: 9px; background: var(--raised); border-left: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); transform: rotate(45deg); } /* two lines reserved: the summary arrives seconds later and must not push the list */
+/* The suricata speaking: its head, then a speech bubble in the mascot's own colour, so it reads as a voice and not as one more row.
+   Two lines are reserved: the summary arrives seconds later and must not push the list. */
+.insights p { display: flex; gap: 14px; align-items: flex-start; margin: 6px 0 2px; min-height: 3.8em; font-size: 15px; line-height: 1.55; }
+.insights p svg { width: 44px; height: 27px; flex: none; margin-top: 7px; }
+.insights p > span { position: relative; flex: 1; padding: 8px 14px; background: #d9775714; border: 1px solid #d9775766; border-radius: 10px; }
+.insights p > span::before { content: ''; position: absolute; left: -7px; top: 13px; width: 11px; height: 11px; background: #261f20; border-left: 1px solid #d9775766; border-bottom: 1px solid #d9775766; transform: rotate(45deg); }
 .insights .meta { color: var(--faint); font-size: 12px; margin-left: 8px; white-space: nowrap; }
 .insights button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 6px; margin-left: 6px; cursor: pointer; }
 .insights button:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
@@ -55,6 +57,11 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 .cols, .row { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 14px; padding: 0 20px; }
 .cols { position: sticky; top: 0; z-index: 1; height: 32px; font-size: 12px; color: var(--faint); background: var(--bg); border-bottom: 1px solid var(--border); }
 .cols .r, .row .r { text-align: right; }
+.cols > span { position: relative; }
+.cols .grip { position: absolute; top: 0; right: -11px; width: 8px; height: 100%; cursor: col-resize; }
+.cols .grip::after { content: ''; position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2px; border-radius: 1px; background: var(--border-strong); opacity: 0; transition: opacity 0.15s; }
+.cols .grip:hover::after, .resizing .cols .grip::after { opacity: 1; }
+.resizing { cursor: col-resize; user-select: none; }
 .list h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 20px; font-size: 13.5px; font-weight: 600; background: var(--raised); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
 .list h2.need { color: var(--need); } .list h2.done { color: var(--done); } .list h2.work { color: var(--work); } .list h2.off { color: var(--muted); }
 .list h2 span { color: var(--muted); font-weight: 500; margin-left: 2px; }
@@ -128,7 +135,7 @@ header .hint kbd { font: inherit; background: var(--raised); border: 1px solid v
 @media (max-width: 1100px) {
   .layout.peek-open { grid-template-columns: 0 minmax(0, 1fr); }
   .layout.peek-open .list { display: none; }
-  :root { --cols: 16px minmax(160px, 1fr) minmax(140px, 1fr) 60px; }
+  :root { --cols: 16px var(--session, minmax(160px, 1fr)) minmax(140px, 1fr) 60px; }
   .cols > :nth-child(n+5), .row > :nth-child(n+5) { display: none; }
   header .totals, header .hint { display: none; }
 }

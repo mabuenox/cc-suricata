@@ -35,6 +35,12 @@ test('background task whose completion notification already arrived', () => {
   assert.equal(derive(registry(), t).status, 'idle')
 })
 
+test('background task whose completion notice came as a queue-operation and an attachment, not a user message', () => {
+  const t = readTranscript(fx('bg-notified-queue')) // the shape since late 2026: the page showed these as "in background" for days
+  assert.deepEqual(t.background, [])
+  assert.equal(derive(registry(), t).status, 'idle')
+})
+
 test('a registry wait (permission prompt, plan approval…) is "waiting" with its reason', () => {
   const t = readTranscript(fx('bg-notified')) // no pending question in the transcript
   const s = derive(registry({ status: 'waiting', waitingFor: 'approve Bash: npm test' }), t)

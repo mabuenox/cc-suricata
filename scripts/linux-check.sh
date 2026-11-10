@@ -38,7 +38,7 @@ echo "== 3. fake notify-send and code on the PATH"
 for b in notify-send code; do printf '#!/bin/sh\necho "%s $*" >> /tmp/calls.log\n' "$b" > /usr/local/bin/$b; chmod +x /usr/local/bin/$b; done
 printf '#!/bin/sh\necho "claude $*" >> /tmp/calls.log\ncat > /tmp/prompt.txt\necho "acme-shop has been asking you for ages."\n' > /usr/local/bin/claude; chmod +x /usr/local/bin/claude
 : > /tmp/calls.log
-node server.mjs --no-open > /tmp/server.log 2>&1 & SRV=$!
+node server.mjs --no-open --notify > /tmp/server.log 2>&1 & SRV=$!
 sleep 1.5
 curl -sf -o /dev/null http://localhost:4747/ && echo "page: 200"
 curl -s -o /dev/null -w "wrong host: %{http_code}\n" -H "Host: evil.test:4747" http://localhost:4747/
